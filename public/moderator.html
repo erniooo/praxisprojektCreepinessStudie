@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderator Panel - NOVA Shop</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="moderator-panel">
+            <h2>🎛️ Moderator Panel</h2>
+            
+            <div class="session-info" id="sessionInfo">
+                <p><strong>Session ID:</strong> <span id="sessionId">-</span></p>
+                <p><strong>Teilnehmer-Link:</strong></p>
+                <p><a href="#" id="participantLink" style="color: #60a5fa; word-break: break-all;" target="_blank">-</a></p>
+            </div>
+
+            <h3 style="margin-bottom: 12px; font-size: 16px;">Aktuelle Stage:</h3>
+            <div class="stage-buttons">
+                <button class="btn-stage" data-stage="A" onclick="setStage('A')">
+                    <strong>Stage A</strong><br>
+                    <small>Generisch / Baseline</small>
+                </button>
+                <button class="btn-stage" data-stage="B" onclick="setStage('B')">
+                    <strong>Stage B</strong><br>
+                    <small>Interessenbasiert</small>
+                </button>
+                <button class="btn-stage" data-stage="C" onclick="setStage('C')">
+                    <strong>Stage C</strong><br>
+                    <small>Hyperpersonalisiert (Creepy)</small>
+                </button>
+                <button class="btn-stage" data-stage="D" onclick="setStage('D')">
+                    <strong>Stage D</strong><br>
+                    <small>Transparent erklärt</small>
+                </button>
+            </div>
+
+            <h3 style="margin-bottom: 12px; font-size: 16px;">Teilnehmer-Daten:</h3>
+            <div class="participant-data" id="participantData">
+                <p>Lade Daten...</p>
+            </div>
+
+            <div id="errorMessage" class="error" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="js/moderator.js"></script>
+</body>
+</html>
