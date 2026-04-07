@@ -63,36 +63,59 @@ function renderRecommendations(data) {
 
 function renderGenericProducts() {
     return `
-        <div class="product-card">
-            <div class="product-image">⌚</div>
-            <div class="product-content">
-                <h3 class="product-title">Smartwatch Pro</h3>
-                <p class="product-description">Fitness-Tracking und Benachrichtigungen</p>
-                <div class="product-price">149,99 €</div>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                <div class="product-badge">Bestseller</div>
+                <div class="product-img-placeholder">⌚</div>
+            </div>
+            <div class="product-info-new">
+                <h3 class="product-name">Smartwatch Pro</h3>
+                <p class="product-brand">NOVA Tech</p>
+                <div class="product-rating">★★★★★ <span>(156)</span></div>
+                <div class="product-price-new">
+                    <span class="price-current">149,99 €</span>
+                </div>
             </div>
         </div>
-        <div class="product-card">
-            <div class="product-image">👟</div>
-            <div class="product-content">
-                <h3 class="product-title">Running Schuhe</h3>
-                <p class="product-description">Optimaler Komfort für jeden Läufer</p>
-                <div class="product-price">89,99 €</div>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                <div class="product-img-placeholder">👟</div>
+            </div>
+            <div class="product-info-new">
+                <h3 class="product-name">Running Schuhe</h3>
+                <p class="product-brand">NOVA Sport</p>
+                <div class="product-rating">★★★★☆ <span>(203)</span></div>
+                <div class="product-price-new">
+                    <span class="price-current">89,99 €</span>
+                </div>
             </div>
         </div>
-        <div class="product-card">
-            <div class="product-image">📱</div>
-            <div class="product-content">
-                <h3 class="product-title">Smartphone Halter</h3>
-                <p class="product-description">Universal für alle Geräte</p>
-                <div class="product-price">19,99 €</div>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                <div class="product-badge sale">-15%</div>
+                <div class="product-img-placeholder">📱</div>
+            </div>
+            <div class="product-info-new">
+                <h3 class="product-name">Smartphone Halter</h3>
+                <p class="product-brand">NOVA Tech</p>
+                <div class="product-rating">★★★★★ <span>(89)</span></div>
+                <div class="product-price-new">
+                    <span class="price-original">22,99 €</span>
+                    <span class="price-current">19,99 €</span>
+                </div>
             </div>
         </div>
-        <div class="product-card">
-            <div class="product-image">🎒</div>
-            <div class="product-content">
-                <h3 class="product-title">Outdoor Rucksack</h3>
-                <p class="product-description">Wasserabweisend, 30L Volumen</p>
-                <div class="product-price">64,99 €</div>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                <div class="product-img-placeholder">🎒</div>
+            </div>
+            <div class="product-info-new">
+                <h3 class="product-name">Outdoor Rucksack</h3>
+                <p class="product-brand">NOVA Adventure</p>
+                <div class="product-rating">★★★★★ <span>(124)</span></div>
+                <div class="product-price-new">
+                    <span class="price-current">64,99 €</span>
+                </div>
             </div>
         </div>
     `;
@@ -106,13 +129,18 @@ function renderInterestProducts(data) {
     
     if (interestList.some(i => i.toLowerCase().includes('sport') || i.toLowerCase().includes('lauf') || i.toLowerCase().includes('fitness'))) {
         products += `
-            <div class="product-card">
-                <div class="product-image">🏃</div>
-                <div class="product-content">
-                    <span class="recommendation-badge">Passend zu Ihren Interessen</span>
-                    <h3 class="product-title">Premium Laufschuhe</h3>
-                    <p class="product-description">Professionelle Running-Schuhe für ambitionierte Läufer</p>
-                    <div class="product-price">119,99 €</div>
+            <div class="product-card-new">
+                <div class="product-image-new">
+                    <div class="product-badge">Für Sie empfohlen</div>
+                    <div class="product-img-placeholder">🏃</div>
+                </div>
+                <div class="product-info-new">
+                    <h3 class="product-name">Premium Laufschuhe</h3>
+                    <p class="product-brand">NOVA Run</p>
+                    <div class="product-rating">★★★★★ <span>(178)</span></div>
+                    <div class="product-price-new">
+                        <span class="price-current">119,99 €</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -120,13 +148,18 @@ function renderInterestProducts(data) {
     
     if (interestList.some(i => i.toLowerCase().includes('koch') || i.toLowerCase().includes('essen'))) {
         products += `
-            <div class="product-card">
-                <div class="product-image">🍳</div>
-                <div class="product-content">
-                    <span class="recommendation-badge">Passend zu Ihren Interessen</span>
-                    <h3 class="product-title">Koch-Messer Set</h3>
-                    <p class="product-description">Professionelles Set für Hobbyköche</p>
-                    <div class="product-price">89,99 €</div>
+            <div class="product-card-new">
+                <div class="product-image-new">
+                    <div class="product-badge">Für Sie empfohlen</div>
+                    <div class="product-img-placeholder">🍳</div>
+                </div>
+                <div class="product-info-new">
+                    <h3 class="product-name">Profi Koch-Messer Set</h3>
+                    <p class="product-brand">NOVA Kitchen</p>
+                    <div class="product-rating">★★★★★ <span>(234)</span></div>
+                    <div class="product-price-new">
+                        <span class="price-current">89,99 €</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -134,13 +167,18 @@ function renderInterestProducts(data) {
     
     if (interestList.some(i => i.toLowerCase().includes('gam') || i.toLowerCase().includes('spiel'))) {
         products += `
-            <div class="product-card">
-                <div class="product-image">🎮</div>
-                <div class="product-content">
-                    <span class="recommendation-badge">Passend zu Ihren Interessen</span>
-                    <h3 class="product-title">Gaming Headset</h3>
-                    <p class="product-description">7.1 Surround Sound für immersives Gaming</p>
-                    <div class="product-price">79,99 €</div>
+            <div class="product-card-new">
+                <div class="product-image-new">
+                    <div class="product-badge">Für Sie empfohlen</div>
+                    <div class="product-img-placeholder">🎮</div>
+                </div>
+                <div class="product-info-new">
+                    <h3 class="product-name">Gaming Headset Pro</h3>
+                    <p class="product-brand">NOVA Gaming</p>
+                    <div class="product-rating">★★★★★ <span>(312)</span></div>
+                    <div class="product-price-new">
+                        <span class="price-current">79,99 €</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -148,13 +186,17 @@ function renderInterestProducts(data) {
     
     // Add generic fallback
     products += `
-        <div class="product-card">
-            <div class="product-image">📖</div>
-            <div class="product-content">
-                <span class="recommendation-badge">Könnte Sie interessieren</span>
-                <h3 class="product-title">Bestseller Buch</h3>
-                <p class="product-description">Aktuelle Top-Empfehlung</p>
-                <div class="product-price">16,99 €</div>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                <div class="product-img-placeholder">📖</div>
+            </div>
+            <div class="product-info-new">
+                <h3 class="product-name">Bestseller Buch</h3>
+                <p class="product-brand">NOVA Publishing</p>
+                <div class="product-rating">★★★★☆ <span>(89)</span></div>
+                <div class="product-price-new">
+                    <span class="price-current">16,99 €</span>
+                </div>
             </div>
         </div>
     `;
@@ -168,24 +210,38 @@ function renderPersonalizedProducts(data, showTransparency) {
     }
     
     return data.recommendations.map(rec => `
-        <div class="product-card">
-            <div class="product-image">${rec.emoji}</div>
-            <div class="product-content">
-                ${rec.personalMessage ? `<div class="personalized-message">${rec.personalMessage}</div>` : ''}
-                <h3 class="product-title">${rec.title}</h3>
-                <p class="product-description">${rec.description}</p>
+        <div class="product-card-new">
+            <div class="product-image-new">
+                ${!showTransparency ? '<div class="product-badge">Speziell für Sie</div>' : '<div class="product-badge">Empfohlen</div>'}
+                <div class="product-img-placeholder">${rec.emoji}</div>
+            </div>
+            <div class="product-info-new">
+                ${rec.personalMessage && !showTransparency ? `<div class="personalized-message">${rec.personalMessage}</div>` : ''}
+                <h3 class="product-name">${rec.title}</h3>
+                <p class="product-brand">NOVA Premium</p>
+                ${rec.description ? `<div class="product-rating">★★★★★ <span>(${Math.floor(Math.random() * 200 + 50)})</span></div>` : ''}
                 ${showTransparency && rec.reason ? `
                     <div class="transparency-box">
                         <strong>Warum diese Empfehlung?</strong>
                         ${rec.reason}
                     </div>
                 ` : ''}
-                <div class="product-price">${rec.price}</div>
+                <div class="product-price-new">
+                    <span class="price-current">${rec.price}</span>
+                </div>
             </div>
         </div>
     `).join('');
 }
 
 // Initial load and polling
-updateRecommendations();
+async function init() {
+    await updateRecommendations();
+    // Force render even if stage hasn't changed
+    const response = await fetch(`/api/stage?session=${sessionId}`);
+    const data = await response.json();
+    renderRecommendations(data);
+}
+
+init();
 setInterval(updateRecommendations, 2000); // Poll every 2 seconds
