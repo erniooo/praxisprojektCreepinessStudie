@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.git
+.env
+.env.local
+.DS_Store
+node_modules
+.vercel
+*.log
+.nixpacks
