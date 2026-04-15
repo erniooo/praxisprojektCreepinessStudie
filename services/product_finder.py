@@ -13,6 +13,7 @@ from services.openai_config import (
 )
 
 SERPER_API_URL = "https://google.serper.dev/shopping"
+SERPER_IMAGES_API_URL = "https://google.serper.dev/images"
 MAX_SEARCH_QUERIES = {
     1: 3,
     2: 4,
@@ -21,6 +22,9 @@ MAX_SEARCH_QUERIES = {
     5: 5,
 }
 SEARCH_TIMEOUT_SECONDS = 6
+IMAGE_SEARCH_TIMEOUT_SECONDS = 5
+IMAGE_SEARCH_WORKERS = 7
+MIN_IMAGE_AREA = 280_000
 
 
 def extract_image_url(item):
@@ -43,6 +47,37 @@ def extract_image_url(item):
                         return nested_value
 
     return ""
+
+
+def parse_dimension(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def image_area(item):
+    width = parse_dimension(item.get("imageWidth") or item.get("width"))
+    height = parse_dimension(item.get("imageHeight") or item.get("height"))
+    return width * height
+
+
+def is_low_quality_google_thumbnail(url):
+    return "encrypted-tbn" in url or "gstatic.com/images" in url
+
+
+def image_quality_score(item):
+    url = extract_image_url(item)
+    if not url:
+        return -1
+
+    score = image_area(item)
+    if score == 0 and not is_low_quality_google_thumbnail(url):
+        score = MIN_IMAGE_AREA
+    if is_low_quality_google_thumbnail(url):
+        score -= MIN_IMAGE_AREA
+
+    return score
 
 
 def generate_search_queries(profile, level):
@@ -157,6 +192,68 @@ def search_products(query):
         return []
 
 
+def search_high_quality_image(product):
+    api_key = os.environ.get('SERPER_API_KEY')
+    if not api_key:
+        return ""
+
+    headers = {
+        'X-API-KEY': api_key,
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'q': f'{product.get("name", "")} produktbild',
+        'gl': 'de',
+        'hl': 'de',
+        'num': 6
+    }
+
+    try:
+        response = requests.post(
+            SERPER_IMAGES_API_URL,
+            json=payload,
+            headers=headers,
+            timeout=IMAGE_SEARCH_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        print(f"Serper image API error for product '{product.get('name', '')}': {e}")
+        return ""
+
+    candidates = data.get('images', [])
+    if not candidates:
+        return ""
+
+    best = max(candidates, key=image_quality_score)
+    if image_quality_score(best) < MIN_IMAGE_AREA:
+        return ""
+
+    return extract_image_url(best)
+
+
+def upgrade_product_images(products):
+    if not products:
+        return products
+
+    max_workers = min(len(products), IMAGE_SEARCH_WORKERS)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(search_high_quality_image, product): product for product in products}
+        for future in as_completed(futures):
+            product = futures[future]
+            try:
+                upgraded_image = future.result()
+            except Exception as e:
+                print(f"Image upgrade failed for product '{product.get('name', '')}': {e}")
+                upgraded_image = ""
+
+            if upgraded_image:
+                product['thumbnailImage'] = product.get('image', '')
+                product['image'] = upgraded_image
+
+    return products
+
+
 def find_products(profile, level):
     try:
         generated_queries = generate_search_queries(profile, level)
@@ -194,4 +291,4 @@ def find_products(profile, level):
     
     # Limit based on level
     max_products = 8 if level == 1 else 14
-    return all_products[:max_products]
+    return upgrade_product_images(all_products[:max_products])
