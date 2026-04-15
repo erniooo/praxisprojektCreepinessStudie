@@ -5,6 +5,7 @@ import os
 import requests
 import uuid
 import threading
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from services.transcriber import transcribe_audio
@@ -22,6 +23,42 @@ os.makedirs(STORAGE_AUDIO, exist_ok=True)
 os.makedirs(STORAGE_SESSIONS, exist_ok=True)
 
 sessions = {}
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def create_session_state(status='created', progress='', raw_transcript=None):
+    return {
+        'status': status,
+        'progress': progress,
+        'stage': 'generic',
+        'transcript': None,
+        'profile': None,
+        'shop_data': None,
+        'level': 3,
+        'raw_transcript': raw_transcript,
+        'ratings': None,
+        'ratings_by_stage': {},
+        'interaction_events': [],
+        'stage_history': [{'stage': 'generic', 'timestamp': now_iso(), 'source': 'session_start'}],
+        'moderator_notes': {},
+        'rating_request_stage': None,
+        'released_at': None
+    }
+
+
+def track_event(session_id, event_type, payload=None):
+    if session_id not in sessions:
+        return
+    sessions[session_id].setdefault('interaction_events', []).append({
+        'type': event_type,
+        'timestamp': now_iso(),
+        'stage': sessions[session_id].get('stage', 'generic'),
+        'level': sessions[session_id].get('level', 3),
+        'payload': payload or {}
+    })
 
 
 def save_session(session_id):
@@ -74,6 +111,7 @@ def generate_shop_pipeline(session_id, level):
         # Step 5: Build base shop and apply compact personalization
         sessions[session_id]['progress'] = 'Personalisiere Grundshop...'
         shop_data = build_shop(profile, products, level)
+        shop_data['generatedAt'] = now_iso()
         sessions[session_id]['shop_data'] = shop_data
         sessions[session_id]['level'] = level
         sessions[session_id]['status'] = 'shop_generated'
@@ -129,15 +167,7 @@ def serve_static(path):
 @app.route('/api/session/create', methods=['POST'])
 def create_session():
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {
-        'status': 'created',
-        'progress': '',
-        'stage': 'generic',
-        'transcript': None,
-        'profile': None,
-        'shop_data': None,
-        'level': 3
-    }
+    sessions[session_id] = create_session_state()
     return jsonify({'sessionId': session_id})
 
 
@@ -166,24 +196,18 @@ def upload_audio():
 
 @app.route('/api/transcript/upload', methods=['POST'])
 def upload_transcript():
-    data = request.json
+    data = request.json or {}
     raw_transcript = data.get('transcript', '')
 
     if not raw_transcript.strip():
         return jsonify({'error': 'Empty transcript'}), 400
 
     session_id = str(uuid.uuid4())
-    sessions[session_id] = {
-        'status': 'uploading',
-        'progress': 'Transkript erhalten, starte Verarbeitung...',
-        'stage': 'generic',
-        'transcript': None,
-        'profile': None,
-        'shop_data': None,
-        'level': 3,
-        'raw_transcript': raw_transcript,
-        'ratings': None
-    }
+    sessions[session_id] = create_session_state(
+        status='uploading',
+        progress='Transkript erhalten, starte Verarbeitung...',
+        raw_transcript=raw_transcript
+    )
 
     def process_transcript_pipeline(sid, text):
         try:
@@ -212,14 +236,59 @@ def upload_transcript():
 
 @app.route('/api/ratings/save', methods=['POST'])
 def save_ratings():
-    data = request.json
+    data = request.json or {}
     session_id = data.get('session_id')
     ratings = data.get('ratings')
 
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
 
+    rating_stage = data.get('stage') or sessions[session_id].get('rating_request_stage') or sessions[session_id].get('stage', 'generic')
     sessions[session_id]['ratings'] = ratings
+    sessions[session_id].setdefault('ratings_by_stage', {})[rating_stage] = {
+        'stage': rating_stage,
+        'timestamp': now_iso(),
+        'ratings': ratings
+    }
+    sessions[session_id]['status'] = 'shop_ready'
+    sessions[session_id]['rating_request_stage'] = None
+    track_event(session_id, 'rating_submit', {'stage': rating_stage, 'ratings': ratings})
+    save_session(session_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/interaction/track', methods=['POST'])
+def track_interaction():
+    data = request.json or {}
+    session_id = data.get('session_id')
+    event_type = data.get('type')
+    payload = data.get('payload') or {}
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+    if not event_type:
+        return jsonify({'error': 'Missing event type'}), 400
+
+    track_event(session_id, event_type, payload)
+    save_session(session_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/moderator/note', methods=['POST'])
+def save_moderator_note():
+    data = request.json or {}
+    session_id = data.get('session_id')
+    stage = data.get('stage') or 'generic'
+    note = data.get('note') or ''
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    sessions[session_id].setdefault('moderator_notes', {})[stage] = {
+        'stage': stage,
+        'note': note,
+        'timestamp': now_iso()
+    }
     save_session(session_id)
     return jsonify({'success': True})
 
@@ -247,20 +316,32 @@ def session_status():
         result['level'] = s['level']
     if s.get('ratings'):
         result['ratings'] = s['ratings']
+    if s.get('ratings_by_stage'):
+        result['ratingsByStage'] = s['ratings_by_stage']
+    if s.get('interaction_events'):
+        result['interactionEvents'] = s['interaction_events']
+    if s.get('stage_history'):
+        result['stageHistory'] = s['stage_history']
+    if s.get('moderator_notes'):
+        result['moderatorNotes'] = s['moderator_notes']
+    if s.get('rating_request_stage'):
+        result['ratingRequestStage'] = s['rating_request_stage']
+    if s.get('released_at'):
+        result['releasedAt'] = s['released_at']
 
     return jsonify(result)
 
 
 @app.route('/api/shop/generate', methods=['POST'])
 def generate_shop():
-    data = request.json
+    data = request.json or {}
     session_id = data.get('session_id')
     level = data.get('level', 3)
 
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
 
-    if sessions[session_id].get('status') not in ('profile_ready', 'shop_generated'):
+    if sessions[session_id].get('status') not in ('profile_ready', 'shop_generated', 'shop_ready'):
         return jsonify({'error': 'Profile not ready yet'}), 400
 
     level = max(1, min(5, int(level)))
@@ -274,19 +355,22 @@ def generate_shop():
 
 @app.route('/api/shop/release', methods=['POST'])
 def release_shop():
-    data = request.json
+    data = request.json or {}
     session_id = data.get('session_id')
 
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
 
     sessions[session_id]['status'] = 'shop_ready'
+    sessions[session_id]['released_at'] = now_iso()
+    track_event(session_id, 'shop_release')
+    save_session(session_id)
     return jsonify({'success': True})
 
 
 @app.route('/api/stage/set', methods=['POST'])
 def set_stage():
-    data = request.json
+    data = request.json or {}
     session_id = data.get('session_id')
     stage = data.get('stage')
 
@@ -298,9 +382,18 @@ def set_stage():
 
     if stage == 'show_ratings':
         sessions[session_id]['status'] = 'show_ratings'
+        sessions[session_id]['rating_request_stage'] = sessions[session_id].get('stage', 'generic')
+        track_event(session_id, 'rating_request', {'stage': sessions[session_id]['rating_request_stage']})
     else:
         sessions[session_id]['stage'] = stage
+        sessions[session_id].setdefault('stage_history', []).append({
+            'stage': stage,
+            'timestamp': now_iso(),
+            'source': 'moderator'
+        })
+        track_event(session_id, 'stage_change', {'stage': stage})
 
+    save_session(session_id)
     return jsonify({'success': True, 'stage': stage})
 
 

@@ -67,6 +67,19 @@
                     <input type="text" id="participantLink" readonly>
                 </div>
             </div>
+
+            <!-- Stage Script -->
+            <div class="mod-card" id="stageScriptCard" style="display: none;">
+                <div class="mod-card-title-row">
+                    <h3>Interview-Leitfragen</h3>
+                    <span class="stage-timer" id="stageTimer">00:00</span>
+                </div>
+                <div id="stageScriptContent" class="stage-script-content"></div>
+                <label class="stage-note-label" for="stageNote">Moderator-Notiz zu dieser Stage</label>
+                <textarea id="stageNote" class="stage-note-input" rows="4" placeholder="Kurz festhalten, was beim Stimulus passiert ist..."></textarea>
+                <button class="btn-note-save" id="saveNoteBtn">Notiz speichern</button>
+                <p class="note-save-status" id="noteSaveStatus"></p>
+            </div>
         </div>
     </div>
     <script src="js/moderator.js"></script>

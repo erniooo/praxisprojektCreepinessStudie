@@ -44,6 +44,10 @@
             </div>
         </section>
 
+        <!-- Personalization Stimulus Panels -->
+        <section class="personalization-panel" id="personalizationPanel" style="display: none;"></section>
+        <section class="control-center-panel" id="controlCenterPanel" style="display: none;"></section>
+
         <!-- Dynamic Sections -->
         <div id="shopSections"></div>
 
@@ -140,7 +144,30 @@
                 </div>
             </div>
 
+            <div class="rating-item">
+                <label>Wie stark beeinflusst diese Personalisierung Ihr <strong>Vertrauen</strong> in den Shop?</label>
+                <div class="rating-scale" data-key="trust">
+                    <span class="scale-label">gar nicht</span>
+                    <button data-val="1">1</button>
+                    <button data-val="2">2</button>
+                    <button data-val="3">3</button>
+                    <button data-val="4">4</button>
+                    <button data-val="5">5</button>
+                    <button data-val="6">6</button>
+                    <button data-val="7">7</button>
+                    <span class="scale-label">sehr stark</span>
+                </div>
+            </div>
+
             <button class="btn-primary" id="submitRatings" disabled>Bewertung abschicken</button>
+        </div>
+    </div>
+
+    <!-- Product / Explanation Modal -->
+    <div class="shop-modal-overlay" id="shopModal" style="display: none;">
+        <div class="shop-modal-card">
+            <button class="shop-modal-close" id="shopModalClose" aria-label="Schliessen">&times;</button>
+            <div id="shopModalContent"></div>
         </div>
     </div>
 

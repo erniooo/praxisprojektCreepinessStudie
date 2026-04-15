@@ -38,6 +38,129 @@ def _word_limit(text, max_words):
     return " ".join(words[:max_words])
 
 
+SIGNAL_LABELS = {
+    "name": "Name",
+    "city": "Stadt",
+    "interests": "Interessen",
+    "shopping_habits": "Shopping-Verhalten",
+    "brands": "Genannte Marken",
+    "life_events": "Aktuelle Lebenslage",
+    "price_sensitivity": "Budgethinweis",
+    "mentioned_products": "Erwaehnte Produkte",
+    "subtle_details": "Beilaeufige Aussage",
+    "keywords": "Interview-Keywords",
+}
+
+
+def _collect_used_signals(profile, level):
+    keys_by_level = {
+        1: [],
+        2: ["name", "city", "interests"],
+        3: ["name", "city", "interests", "price_sensitivity", "brands", "shopping_habits"],
+        4: ["name", "city", "interests", "price_sensitivity", "brands", "shopping_habits", "mentioned_products", "life_events"],
+        5: ["name", "city", "interests", "price_sensitivity", "brands", "shopping_habits", "mentioned_products", "life_events", "subtle_details"],
+    }
+    signals = []
+    for key in keys_by_level.get(level, keys_by_level[3]):
+        value = profile.get(key)
+        if value is None or value == "null" or value == []:
+            continue
+        if isinstance(value, list):
+            display = ", ".join(str(item).strip() for item in value[:3] if str(item).strip())
+        else:
+            display = str(value).strip()
+        if not display:
+            continue
+        signals.append({
+            "key": key,
+            "label": SIGNAL_LABELS.get(key, key),
+            "value": display,
+            "sensitivity": "high" if key in ("life_events", "subtle_details") else "normal",
+        })
+    return signals
+
+
+def _signal_values(signals):
+    return [signal["value"] for signal in signals if signal.get("value")]
+
+
+def _creepy_detail(profile):
+    return _first_profile_item(profile, ["subtle_details", "life_events", "mentioned_products", "shopping_habits"])
+
+
+def _stage_metadata(level):
+    labels = {
+        1: ("Baseline", "Neutraler Grundshop ohne sichtbare Interviewdetails."),
+        2: ("Harmlos personalisiert", "Name, Stadt und grobe Interessen werden sichtbar."),
+        3: ("Deutlich personalisiert", "Mehrere Interviewsignale werden kombiniert."),
+        4: ("Hyperpersonalisiert", "Cross-Context aus Interviewaussagen wird angedeutet."),
+        5: ("Creepy Peak", "Genau ein beilaeufiger Interviewmoment wird sichtbar aufgegriffen."),
+    }
+    label, description = labels.get(level, labels[3])
+    return {
+        "level": level,
+        "label": label,
+        "description": description,
+        "dimensions": ["Treffsicherheit", "Datensensitivitaet", "Transparenz", "Kontrolle", "Beobachtungsgefuehl"],
+        "stageScripts": {
+            "generic": {
+                "goal": "Baseline-Reaktion ohne Priming erfassen.",
+                "questions": [
+                    "Was faellt dir zuerst auf?",
+                    "Wie normal oder glaubwuerdig wirkt die Seite?",
+                    "Was wirkt passend, was unpassend?"
+                ]
+            },
+            "personalized": {
+                "goal": "Treffsicherheit und vermutete Datengrundlage herausarbeiten.",
+                "questions": [
+                    "Welche Empfehlungen wirken auf dich zugeschnitten?",
+                    "Woher glaubst du, hat das System diese Informationen?",
+                    "Gab es etwas, das fast zu gut gepasst hat?"
+                ]
+            },
+            "transparent": {
+                "goal": "Transparenz, Kontrolle und moegliche Uebertransparenz pruefen.",
+                "questions": [
+                    "Hilft dir die Erklaerung oder macht sie es unangenehmer?",
+                    "Welche Informationen sollte ein Shop nicht nutzen?",
+                    "Was wuerdest du gern selbst steuern oder ausschalten?"
+                ]
+            }
+        }
+    }
+
+
+def _control_options(level, signals):
+    signal_keys = {signal["key"] for signal in signals}
+    return [
+        {
+            "id": "location",
+            "label": "Standort verwenden",
+            "description": "Empfehlungen und Lieferhinweise auf Stadt/Region abstimmen.",
+            "enabled": level >= 2 and "city" in signal_keys,
+        },
+        {
+            "id": "interview_details",
+            "label": "Interviewdetails verwenden",
+            "description": "Aussagen aus dem Gespraech fuer Produktauswahl und Texte nutzen.",
+            "enabled": level >= 3,
+        },
+        {
+            "id": "subtle_mentions",
+            "label": "Beilaeufige Aussagen verwenden",
+            "description": "Auch nebenbei erwaehnte Details in Empfehlungen einbeziehen.",
+            "enabled": level >= 5 and "subtle_details" in signal_keys,
+        },
+        {
+            "id": "similar_customers",
+            "label": "Aehnliche Kunden verwenden",
+            "description": "Dein Profil mit aehnlichen Einkaufsmustern vergleichen.",
+            "enabled": level >= 4,
+        },
+    ]
+
+
 def _normalize_products(products):
     normalized = []
     for product in products or []:
@@ -97,14 +220,14 @@ def _personalized_nav(profile):
     return result
 
 
-def _default_product_copy(product, profile, level):
-    detail = _first_profile_item(profile, ["subtle_details", "life_events", "interests"])
+def _default_product_copy(product, profile, level, copy_index):
+    detail = _creepy_detail(profile)
     query = product.get("search_query")
 
-    if level >= 5 and detail:
+    if level >= 5 and copy_index == 0 and detail:
         return (
             "Greift ein Interviewdetail auf",
-            f"Im Interview wurde dieses Detail nutzbar: {detail}."
+            f"Auch wenn du es nur kurz erwaehnt hast, wurde dieses Detail beruecksichtigt: {detail}."
         )
     if level >= 4 and query:
         return (
@@ -121,11 +244,14 @@ def _default_product_copy(product, profile, level):
 
 
 def _build_product(product, profile, level, copy_index):
-    personal_label, transparency_reason = _default_product_copy(product, profile, level)
+    personal_label, transparency_reason = _default_product_copy(product, profile, level, copy_index)
     result = dict(product)
     result["_copy_index"] = copy_index
     result["personalLabel"] = _word_limit(personal_label, 10)
     result["transparencyReason"] = _word_limit(transparency_reason, 22)
+    result["whyDetails"] = transparency_reason
+    result["signalKeys"] = ["interests", "keywords"] if level >= 2 else []
+    result["isCreepyMoment"] = level >= 5 and copy_index == 0 and bool(_creepy_detail(profile))
     return result
 
 
@@ -163,6 +289,8 @@ def _base_shop(profile, products, level):
     name = _profile_value(profile, "name", "Gast")
     city = _profile_value(profile, "city")
     interest = _first_profile_item(profile, ["interests", "mentioned_products", "keywords"])
+    signals = _collect_used_signals(profile, level)
+    creepy_detail = _creepy_detail(profile)
     section_products = _split_products(products, profile, level)
 
     personalized_banner = "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht"
@@ -171,8 +299,17 @@ def _base_shop(profile, products, level):
 
     hero_focus = interest or "deinen Alltag"
     hero_headline = f"Ausgewaehlt fuer {hero_focus}"
-    if level >= 5:
-        hero_headline = f"{name}, wir haben die Details aus dem Gespraech aufgegriffen"
+    if level >= 5 and creepy_detail:
+        hero_headline = f"{name}, fuer das Detail aus unserem Gespraech kuratiert"
+
+    creepy_moment = None
+    if level >= 5 and creepy_detail:
+        creepy_moment = {
+            "productIndex": 0,
+            "signal": creepy_detail,
+            "headline": "Auch kurz Erwaehntes fliesst ein",
+            "text": f"Auch wenn du es nur kurz erwaehnt hast: {creepy_detail} wurde bei diesen Empfehlungen beruecksichtigt."
+        }
 
     return {
         "topBanner": {
@@ -260,6 +397,16 @@ def _base_shop(profile, products, level):
                 "text": {"generic": "SSL verschluesselt", "personalized": "SSL verschluesselt"},
             },
         ],
+        "usedSignals": signals,
+        "creepyMoment": creepy_moment,
+        "explanationDetails": {
+            "summary": "Dieser Shop wurde aus dem Interviewprofil und echten Shopping-Ergebnissen zusammengestellt.",
+            "dataBasis": _signal_values(signals),
+            "transparentIntro": "Genutzte Signale aus dem Interview",
+            "productIntro": "Warum dieses Produkt angezeigt wird"
+        },
+        "controlOptions": _control_options(level, signals),
+        "stageMetadata": _stage_metadata(level),
     }
 
 
@@ -316,6 +463,7 @@ Antworte NUR als JSON-Objekt in diesem Format:
 Regeln:
 - Schreibe auf Deutsch.
 - Bei Level 5 darf die Personalisierung bewusst sehr spezifisch wirken.
+- Bei Level 5 darf nur Produktindex 0 einen beilaeufigen oder invasiven Moment aufgreifen.
 - productCopy darf nur Indizes aus der Produktliste enthalten.
 - Wiederhole keine Produktdaten wie name, image, price oder shop."""
             },
