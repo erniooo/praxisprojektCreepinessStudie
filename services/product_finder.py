@@ -33,7 +33,7 @@ Antworte NUR mit einem JSON-Array von Strings, z.B.:
             }
         ],
         temperature=0.7,
-        max_tokens=500
+        max_completion_tokens=500
     )
     
     content = response.choices[0].message.content.strip()

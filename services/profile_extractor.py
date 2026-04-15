@@ -53,7 +53,7 @@ Antworte NUR mit diesem JSON (keine anderen Texte):
             }
         ],
         temperature=0.2,
-        max_tokens=2000
+        max_completion_tokens=2000
     )
     
     content = response.choices[0].message.content.strip()
