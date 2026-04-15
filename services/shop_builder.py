@@ -1,7 +1,12 @@
 import os
 import json
 from openai import OpenAI
-from services.openai_config import PERSONALIZATION_MODEL
+from services.json_utils import parse_json_response
+from services.openai_config import (
+    JSON_RESPONSE_FORMAT,
+    PERSONALIZATION_MODEL,
+    SHOP_TOKEN_LIMIT,
+)
 
 def build_shop(profile, products, level):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -148,17 +153,9 @@ WICHTIG:
 - personalLabel und transparencyReason für JEDES Produkt schreiben"""
             }
         ],
+        response_format=JSON_RESPONSE_FORMAT,
         temperature=0.6,
-        max_completion_tokens=4000
+        max_completion_tokens=SHOP_TOKEN_LIMIT
     )
     
-    content = response.choices[0].message.content.strip()
-    
-    if content.startswith('```'):
-        content = content.split('```')[1]
-        if content.startswith('json'):
-            content = content[4:]
-    if content.endswith('```'):
-        content = content[:-3]
-    
-    return json.loads(content)
+    return parse_json_response(response, "Shop-JSON")

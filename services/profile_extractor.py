@@ -1,7 +1,12 @@
 import os
 import json
 from openai import OpenAI
-from services.openai_config import PERSONALIZATION_MODEL
+from services.json_utils import parse_json_response
+from services.openai_config import (
+    JSON_RESPONSE_FORMAT,
+    PERSONALIZATION_MODEL,
+    PROFILE_TOKEN_LIMIT,
+)
 
 def extract_profile(speaker_turns):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -52,17 +57,9 @@ Antworte NUR mit diesem JSON (keine anderen Texte):
 }}"""
             }
         ],
+        response_format=JSON_RESPONSE_FORMAT,
         temperature=0.2,
-        max_completion_tokens=2000
+        max_completion_tokens=PROFILE_TOKEN_LIMIT
     )
     
-    content = response.choices[0].message.content.strip()
-    
-    if content.startswith('```'):
-        content = content.split('```')[1]
-        if content.startswith('json'):
-            content = content[4:]
-    if content.endswith('```'):
-        content = content[:-3]
-    
-    return json.loads(content)
+    return parse_json_response(response, "Profil-Extraktion")

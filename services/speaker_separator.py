@@ -1,28 +1,33 @@
 import os
-import json
 from openai import OpenAI
-from services.openai_config import PERSONALIZATION_MODEL
+from services.json_utils import parse_json_response
+from services.openai_config import (
+    JSON_RESPONSE_FORMAT,
+    PERSONALIZATION_MODEL,
+    SPEAKER_TOKEN_LIMIT,
+)
+
 
 def separate_speakers(raw_transcript):
-    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
-    
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
     response = client.chat.completions.create(
         model=PERSONALIZATION_MODEL,
         messages=[
             {
                 "role": "system",
-                "content": """Du bist ein Experte für Gesprächsanalyse. In diesem Transkript sprechen genau 2 Personen:
+                "content": """Du bist ein Experte fuer Gespraechsanalyse. In diesem Transkript sprechen genau 2 Personen:
 
-1. INTERVIEWER: Stellt Fragen, leitet Gespräch, kurze Sätze, fragt nach Meinungen/Erfahrungen
-2. TEILNEHMER: Gibt ausführliche Antworten, erzählt von sich, längere Redeanteile
+1. INTERVIEWER: Stellt Fragen, leitet Gespraech, kurze Saetze, fragt nach Meinungen/Erfahrungen
+2. TEILNEHMER: Gibt ausfuehrliche Antworten, erzaehlt von sich, laengere Redeanteile
 
-Trenne die Redeanteile und gib ein JSON-Array zurück. Achte auf Gesprächswechsel anhand von:
+Trenne die Redeanteile und gib ein valides JSON-Objekt zurueck. Achte auf Gespraechswechsel anhand von:
 - Fragezeichen (meist Interviewer)
-- Antwortlänge (Teilnehmer redet mehr)
-- Inhalt (Interviewer fragt, Teilnehmer erzählt)
-- Gesprächsfluss (nach Frage kommt Antwort)
+- Antwortlaenge (Teilnehmer redet mehr)
+- Inhalt (Interviewer fragt, Teilnehmer erzaehlt)
+- Gespraechsfluss (nach Frage kommt Antwort)
 
-Antworte NUR mit einem JSON-Array, kein anderer Text."""
+Antworte NUR mit einem JSON-Objekt, kein anderer Text."""
             },
             {
                 "role": "user",
@@ -31,21 +36,24 @@ Antworte NUR mit einem JSON-Array, kein anderer Text."""
 Transkript:
 {raw_transcript}
 
-Antworte als JSON-Array:
-[{{"speaker": "interviewer", "text": "..."}}, {{"speaker": "participant", "text": "..."}}, ...]"""
+Antworte in diesem Format:
+{{"turns": [{{"speaker": "interviewer", "text": "..."}}, {{"speaker": "participant", "text": "..."}}]}}"""
             }
         ],
+        response_format=JSON_RESPONSE_FORMAT,
         temperature=0.3,
-        max_completion_tokens=4000
+        max_completion_tokens=SPEAKER_TOKEN_LIMIT
     )
-    
-    content = response.choices[0].message.content.strip()
-    
-    if content.startswith('```'):
-        content = content.split('```')[1]
-        if content.startswith('json'):
-            content = content[4:]
-    if content.endswith('```'):
-        content = content[:-3]
-    
-    return json.loads(content)
+
+    data = parse_json_response(response, "Sprechertrennung")
+    turns = data.get("turns", []) if isinstance(data, dict) else data
+    normalized = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        speaker = turn.get("speaker")
+        normalized.append({
+            "speaker": "interviewer" if speaker == "interviewer" else "participant",
+            "text": str(turn.get("text", "")).strip()
+        })
+    return [turn for turn in normalized if turn["text"]]

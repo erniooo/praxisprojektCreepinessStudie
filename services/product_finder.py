@@ -2,7 +2,12 @@ import os
 import json
 import requests
 from openai import OpenAI
-from services.openai_config import PERSONALIZATION_MODEL
+from services.json_utils import parse_json_response
+from services.openai_config import (
+    JSON_RESPONSE_FORMAT,
+    PERSONALIZATION_MODEL,
+    SEARCH_QUERY_TOKEN_LIMIT,
+)
 
 SERPER_API_URL = "https://google.serper.dev/shopping"
 
@@ -14,7 +19,7 @@ def generate_search_queries(profile, level):
         messages=[
             {
                 "role": "system",
-                "content": "Du generierst Google Shopping Suchbegriffe auf Deutsch."
+                "content": "Du generierst ein valides JSON-Objekt mit Google Shopping Suchbegriffen auf Deutsch."
             },
             {
                 "role": "user",
@@ -28,23 +33,18 @@ Personalisierungs-Level: {level}/5
 - Level 3: Spezifischere Begriffe (z.B. "manduka yoga matte")
 - Level 4-5: Sehr spezifisch, auch beiläufig erwähnte Dinge (z.B. "vegane proteinriegel münchen")
 
-Antworte NUR mit einem JSON-Array von Strings, z.B.:
-["suchbegriff 1", "suchbegriff 2", ...]"""
+Antworte NUR mit einem JSON-Objekt in diesem Format:
+{{"queries": ["suchbegriff 1", "suchbegriff 2"]}}"""
             }
         ],
+        response_format=JSON_RESPONSE_FORMAT,
         temperature=0.7,
-        max_completion_tokens=500
+        max_completion_tokens=SEARCH_QUERY_TOKEN_LIMIT
     )
     
-    content = response.choices[0].message.content.strip()
-    if content.startswith('```'):
-        content = content.split('```')[1]
-        if content.startswith('json'):
-            content = content[4:]
-    if content.endswith('```'):
-        content = content[:-3]
-    
-    return json.loads(content)
+    data = parse_json_response(response, "Suchbegriffe")
+    queries = data.get("queries", []) if isinstance(data, dict) else data
+    return [str(query).strip() for query in queries if str(query).strip()]
 
 
 def search_products(query):
