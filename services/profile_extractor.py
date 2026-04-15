@@ -1,6 +1,7 @@
 import os
 import json
 from openai import OpenAI
+from services.openai_config import PERSONALIZATION_MODEL
 
 def extract_profile(speaker_turns):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -15,7 +16,7 @@ def extract_profile(speaker_turns):
     )
     
     response = client.chat.completions.create(
-        model="gpt-5.4-mini",
+        model=PERSONALIZATION_MODEL,
         messages=[
             {
                 "role": "system",

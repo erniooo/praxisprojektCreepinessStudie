@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from openai import OpenAI
+from services.openai_config import PERSONALIZATION_MODEL
 
 SERPER_API_URL = "https://google.serper.dev/shopping"
 
@@ -9,7 +10,7 @@ def generate_search_queries(profile, level):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
     
     response = client.chat.completions.create(
-        model="gpt-5.4-mini",
+        model=PERSONALIZATION_MODEL,
         messages=[
             {
                 "role": "system",

@@ -1,6 +1,7 @@
 import os
 import json
 from openai import OpenAI
+from services.openai_config import PERSONALIZATION_MODEL
 
 def build_shop(profile, products, level):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
@@ -9,7 +10,7 @@ def build_shop(profile, products, level):
     city = profile.get('city', '')
     
     response = client.chat.completions.create(
-        model="gpt-5.4-mini",
+        model=PERSONALIZATION_MODEL,
         messages=[
             {
                 "role": "system",
