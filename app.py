@@ -3,141 +3,88 @@ from flask_cors import CORS
 import json
 import os
 import uuid
-from openai import OpenAI
+import threading
+
+from services.transcriber import transcribe_audio
+from services.speaker_separator import separate_speakers
+from services.profile_extractor import extract_profile
+from services.product_finder import find_products
+from services.shop_builder import build_shop
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)
 
-# In-memory session store
+STORAGE_AUDIO = os.path.join(os.path.dirname(__file__), 'storage', 'audio')
+STORAGE_SESSIONS = os.path.join(os.path.dirname(__file__), 'storage', 'sessions')
+os.makedirs(STORAGE_AUDIO, exist_ok=True)
+os.makedirs(STORAGE_SESSIONS, exist_ok=True)
+
 sessions = {}
 
-def generate_recommendations(user_data):
-    """Generate personalized creepy recommendations using OpenAI"""
-    
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        return generate_fallback_recommendations(user_data)
-    
+
+def save_session(session_id):
     try:
-        client = OpenAI(api_key=api_key)
-        
-        prompt = f"""Du bist ein E-Commerce Empfehlungssystem. Erstelle 6 Produktempfehlungen für eine Person mit folgenden Daten:
-
-- Vorname: {user_data['firstName']}
-- Alter: {user_data['age']}
-- Wohnort: {user_data['city']}
-- Interessen: {user_data['interests']}
-- Letzte Käufe: {user_data['lastPurchase']}
-- Lebenssituation: {user_data['lifestyle']}
-- Gesundheitsfokus: {user_data['healthFocus']}
-
-WICHTIG: 
-1. Für Stage C (creepy): Schreibe eine verblüffend präzise, persönliche Nachricht OHNE zu erklären woher du die Info hast. 
-   Beispiel: "{user_data['firstName']}, perfekt für deine neue Phase in {user_data['city']}"
-   
-2. Für Stage D (transparent): Schreibe den gleichen Text, aber füge eine Erklärung hinzu warum.
-   Beispiel: "Basierend auf deinen Angaben: Du bist {user_data['age']} Jahre alt und wohnst in {user_data['city']}"
-
-Antworte NUR mit einem JSON-Array (kein Markdown, kein Text drumherum) in diesem Format:
-[
-  {{
-    "title": "Produktname",
-    "description": "Kurze Produktbeschreibung",
-    "emoji": "🏃",
-    "price": "XX,99 €",
-    "personalMessage": "Persönliche Nachricht für Stage C",
-    "reason": "Erklärung für Stage D"
-  }},
-  ...
-]
-
-Die Produkte sollten sich auf die Interessen und Lebenssituation beziehen. Nutze cross-context Daten (z.B. Wohnort + Hobby + Lebensumstand kombiniert)."""
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Du bist ein präziser JSON-Generator für E-Commerce Empfehlungen."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            max_tokens=1500
-        )
-        
-        content = response.choices[0].message.content.strip()
-        
-        # Remove markdown code fences if present
-        if content.startswith('```'):
-            content = content.split('```')[1]
-            if content.startswith('json'):
-                content = content[4:]
-        
-        recommendations = json.loads(content)
-        return recommendations
-        
+        path = os.path.join(STORAGE_SESSIONS, f'{session_id}.json')
+        safe = {k: v for k, v in sessions[session_id].items() if k != 'lock'}
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(safe, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"OpenAI error: {e}")
-        return generate_fallback_recommendations(user_data)
+        print(f"Error saving session {session_id}: {e}")
 
-def generate_fallback_recommendations(user_data):
-    """Fallback recommendations if OpenAI fails"""
-    name = user_data['firstName']
-    city = user_data['city']
-    interests = user_data['interests']
-    lifestyle = user_data['lifestyle']
-    age = user_data['age']
-    
-    return [
-        {
-            "title": "Premium Trainingsplan",
-            "description": "Individuell angepasst an dein Fitnesslevel",
-            "emoji": "💪",
-            "price": "24,99 €",
-            "personalMessage": f"{name}, ideal für deinen Start in {city}",
-            "reason": f"Basierend auf deiner Angabe: Du bist in {city} und {lifestyle}"
-        },
-        {
-            "title": "Starter Kit für Hobby-Enthusiasten",
-            "description": f"Alles was du für {interests} brauchst",
-            "emoji": "🎯",
-            "price": "49,99 €",
-            "personalMessage": f"{name}, perfekt passend zu deinen Interessen",
-            "reason": f"Du hast angegeben: Interessen in {interests}"
-        },
-        {
-            "title": "Lokale Erlebnisse Guide",
-            "description": f"Die besten Tipps für {city}",
-            "emoji": "🗺️",
-            "price": "14,99 €",
-            "personalMessage": f"Speziell für dein neues Leben in {city}",
-            "reason": f"Da du in {city} wohnst"
-        },
-        {
-            "title": "Gesundheits-Tracker Premium",
-            "description": "Überwache deine Fortschritte",
-            "emoji": "📊",
-            "price": "39,99 €",
-            "personalMessage": f"{name}, unterstützt dein {user_data['healthFocus']}-Ziel",
-            "reason": f"Du fokussierst dich auf: {user_data['healthFocus']}"
-        },
-        {
-            "title": "Lifestyle Bundle",
-            "description": "Perfekt für deine aktuelle Lebensphase",
-            "emoji": "✨",
-            "price": "59,99 €",
-            "personalMessage": f"Passend zu deiner Situation: {lifestyle}",
-            "reason": f"Du hast angegeben: {lifestyle}"
-        },
-        {
-            "title": "Persönlicher Entwicklungsplan",
-            "description": "Maßgeschneidert für deine Ziele",
-            "emoji": "🎓",
-            "price": "29,99 €",
-            "personalMessage": f"{name}, ideal für {age}-Jährige in {city}",
-            "reason": f"Basierend auf Alter ({age}) und Wohnort ({city})"
-        }
-    ]
 
-# Routes
+def process_audio_pipeline(session_id, audio_path):
+    try:
+        # Step 1: Transcribe
+        sessions[session_id]['status'] = 'transcribing'
+        sessions[session_id]['progress'] = 'Transkribiere Audio...'
+        raw_transcript = transcribe_audio(audio_path)
+        sessions[session_id]['raw_transcript'] = raw_transcript
+
+        # Step 2: Speaker separation
+        sessions[session_id]['progress'] = 'Trenne Sprecher...'
+        speaker_turns = separate_speakers(raw_transcript)
+        sessions[session_id]['transcript'] = speaker_turns
+
+        # Step 3: Profile extraction
+        sessions[session_id]['progress'] = 'Extrahiere Profil...'
+        profile = extract_profile(speaker_turns)
+        sessions[session_id]['profile'] = profile
+        sessions[session_id]['status'] = 'profile_ready'
+        sessions[session_id]['progress'] = 'Profil bereit. Wähle Personalisierungs-Level.'
+
+        save_session(session_id)
+    except Exception as e:
+        print(f"Pipeline error for {session_id}: {e}")
+        sessions[session_id]['status'] = 'error'
+        sessions[session_id]['progress'] = f'Fehler: {str(e)}'
+
+
+def generate_shop_pipeline(session_id, level):
+    try:
+        profile = sessions[session_id]['profile']
+
+        # Step 4: Find real products
+        sessions[session_id]['status'] = 'generating_shop'
+        sessions[session_id]['progress'] = 'Suche passende Produkte...'
+        products = find_products(profile, level)
+        sessions[session_id]['products'] = products
+
+        # Step 5: Build shop JSON
+        sessions[session_id]['progress'] = 'Personalisiere Shop...'
+        shop_data = build_shop(profile, products, level)
+        sessions[session_id]['shop_data'] = shop_data
+        sessions[session_id]['level'] = level
+        sessions[session_id]['status'] = 'shop_generated'
+        sessions[session_id]['progress'] = 'Shop generiert! Bereit zur Freigabe.'
+
+        save_session(session_id)
+    except Exception as e:
+        print(f"Shop generation error for {session_id}: {e}")
+        sessions[session_id]['status'] = 'error'
+        sessions[session_id]['progress'] = f'Fehler: {str(e)}'
+
+
+# Static file routes
 @app.route('/')
 def index():
     return send_from_directory('public', 'index.html')
@@ -146,65 +93,134 @@ def index():
 def serve_static(path):
     return send_from_directory('public', path)
 
-@app.route('/api/session', methods=['POST', 'OPTIONS'])
+
+# API routes
+@app.route('/api/session/create', methods=['POST'])
 def create_session():
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    user_data = request.json
-    
-    # Generate session ID
     session_id = str(uuid.uuid4())
-    
-    # Generate personalized recommendations
-    recommendations = generate_recommendations(user_data)
-    
-    # Store session data
     sessions[session_id] = {
-        'userData': user_data,
-        'stage': 'A',
-        'recommendations': recommendations
+        'status': 'created',
+        'progress': '',
+        'stage': 'generic',
+        'transcript': None,
+        'profile': None,
+        'shop_data': None,
+        'level': 3
     }
-    
     return jsonify({'sessionId': session_id})
 
-@app.route('/api/stage', methods=['GET', 'OPTIONS'])
-def get_stage():
-    if request.method == 'OPTIONS':
-        return '', 200
-    
+
+@app.route('/api/audio/upload', methods=['POST'])
+def upload_audio():
+    session_id = request.form.get('session_id')
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    audio = request.files.get('audio')
+    if not audio:
+        return jsonify({'error': 'No audio file'}), 400
+
+    audio_path = os.path.join(STORAGE_AUDIO, f'{session_id}.webm')
+    audio.save(audio_path)
+
+    sessions[session_id]['status'] = 'uploading'
+    sessions[session_id]['progress'] = 'Audio erhalten, starte Verarbeitung...'
+
+    thread = threading.Thread(target=process_audio_pipeline, args=(session_id, audio_path))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/session/status', methods=['GET'])
+def session_status():
     session_id = request.args.get('session')
-    
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Session not found'}), 404
-    
-    session_data = sessions[session_id]
-    
+
+    s = sessions[session_id]
+    result = {
+        'status': s.get('status'),
+        'progress': s.get('progress'),
+        'stage': s.get('stage')
+    }
+
+    if s.get('transcript'):
+        result['transcript'] = s['transcript']
+    if s.get('profile'):
+        result['profile'] = s['profile']
+    if s.get('shop_data'):
+        result['shopData'] = s['shop_data']
+    if s.get('level'):
+        result['level'] = s['level']
+
+    return jsonify(result)
+
+
+@app.route('/api/shop/generate', methods=['POST'])
+def generate_shop():
+    data = request.json
+    session_id = data.get('session_id')
+    level = data.get('level', 3)
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    if sessions[session_id].get('status') not in ('profile_ready', 'shop_generated'):
+        return jsonify({'error': 'Profile not ready yet'}), 400
+
+    level = max(1, min(5, int(level)))
+
+    thread = threading.Thread(target=generate_shop_pipeline, args=(session_id, level))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/shop/release', methods=['POST'])
+def release_shop():
+    data = request.json
+    session_id = data.get('session_id')
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    sessions[session_id]['status'] = 'shop_ready'
+    return jsonify({'success': True})
+
+
+@app.route('/api/stage/set', methods=['POST'])
+def set_stage():
+    data = request.json
+    session_id = data.get('session_id')
+    stage = data.get('stage')
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    if stage not in ('generic', 'personalized', 'transparent'):
+        return jsonify({'error': 'Invalid stage'}), 400
+
+    sessions[session_id]['stage'] = stage
+    return jsonify({'success': True, 'stage': stage})
+
+
+@app.route('/api/shop/data', methods=['GET'])
+def shop_data():
+    session_id = request.args.get('session')
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Session not found'}), 404
+
+    s = sessions[session_id]
     return jsonify({
-        'stage': session_data['stage'],
-        'userData': session_data['userData'],
-        'recommendations': session_data['recommendations']
+        'stage': s.get('stage', 'generic'),
+        'shopData': s.get('shop_data'),
+        'profile': s.get('profile'),
+        'level': s.get('level', 3)
     })
 
-@app.route('/api/set-stage', methods=['POST', 'OPTIONS'])
-def set_stage():
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    data = request.json
-    session_id = data.get('session')
-    stage = data.get('stage')
-    
-    if not session_id or session_id not in sessions:
-        return jsonify({'error': 'Session not found'}), 404
-    
-    if stage not in ['A', 'B', 'C', 'D']:
-        return jsonify({'error': 'Invalid stage'}), 400
-    
-    # Update stage
-    sessions[session_id]['stage'] = stage
-    
-    return jsonify({'success': True, 'stage': stage})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

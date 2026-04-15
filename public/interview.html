@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview - Aufnahme</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="interview-body">
+    <div class="interview-container">
+        <!-- Recording indicator -->
+        <div class="rec-indicator">
+            <span class="rec-dot"></span>
+            <span>Aufnahme</span>
+        </div>
+
+        <!-- Timer -->
+        <div class="timer" id="timer">00:00</div>
+
+        <!-- Waveform -->
+        <canvas id="waveform" class="waveform"></canvas>
+
+        <!-- Hint for remote -->
+        <p class="interview-hint">Bitte stellen Sie sicher, dass beide Teilnehmer hörbar sind.</p>
+
+        <!-- Controls -->
+        <button class="btn-stop" id="stopBtn">Interview beenden</button>
+
+        <!-- Upload progress -->
+        <div id="uploadStatus" class="upload-status" style="display: none;">
+            <div class="upload-spinner"></div>
+            <p>Audio wird hochgeladen und verarbeitet...</p>
+        </div>
+    </div>
+    <script src="js/recorder.js"></script>
+</body>
+</html>

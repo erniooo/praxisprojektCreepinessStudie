@@ -1,87 +1,152 @@
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session');
+if (!sessionId) document.body.innerHTML = '<p style="color:white;padding:40px;">Keine Session-ID.</p>';
 
-if (!sessionId) {
-    document.getElementById('errorMessage').textContent = 'Keine Session-ID gefunden. Bitte starten Sie mit dem Fragebogen.';
-    document.getElementById('errorMessage').style.display = 'block';
-} else {
-    document.getElementById('sessionId').textContent = sessionId;
-    const participantUrl = `${window.location.origin}/shop.html?session=${sessionId}`;
-    document.getElementById('participantLink').href = participantUrl;
-    document.getElementById('participantLink').textContent = participantUrl;
+const levelDescriptions = {
+    1: 'Subtil: Nur Name im Greeting, sonst generisch.',
+    2: 'Moderat: Name + Stadt, grobe Kategorien.',
+    3: 'Stark: Interessen-spezifische Produkte, persönliche Nachrichten.',
+    4: 'Hyper: Cross-context Daten, Lebenslage eingebaut, "Kunden wie du".',
+    5: 'Extrem: Beiläufig Erwähntes genutzt, sehr spezifische Anspielungen.'
+};
+
+let currentStage = 'generic';
+
+// Level slider
+document.getElementById('levelSlider').addEventListener('input', (e) => {
+    document.getElementById('levelDesc').textContent = levelDescriptions[e.target.value];
+});
+
+// Generate shop
+document.getElementById('generateBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('generateBtn');
+    const level = document.getElementById('levelSlider').value;
+    btn.disabled = true;
+    btn.textContent = 'Generiere...';
     
-    loadSessionData();
+    await fetch('/api/shop/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, level: parseInt(level) })
+    });
+    
+    // Poll for completion
+    const pollGen = setInterval(async () => {
+        const res = await fetch(`/api/session/status?session=${sessionId}`);
+        const data = await res.json();
+        
+        document.getElementById('statusText').textContent = data.progress || '';
+        
+        if (data.status === 'shop_generated') {
+            clearInterval(pollGen);
+            btn.textContent = 'Erneut generieren';
+            btn.disabled = false;
+            showShopControls();
+        } else if (data.status === 'error') {
+            clearInterval(pollGen);
+            btn.textContent = 'Fehler - Erneut versuchen';
+            btn.disabled = false;
+        }
+    }, 2000);
+});
+
+// Stage buttons
+document.querySelectorAll('.btn-stage-mod').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const stage = btn.dataset.stage;
+        await fetch('/api/stage/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, stage })
+        });
+        currentStage = stage;
+        document.querySelectorAll('.btn-stage-mod').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+// Release shop
+document.getElementById('releaseBtn').addEventListener('click', async () => {
+    await fetch('/api/shop/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId })
+    });
+    document.getElementById('releaseBtn').textContent = 'Freigegeben!';
+    document.getElementById('releaseBtn').disabled = true;
+    document.getElementById('linkBox').style.display = 'block';
+    document.getElementById('participantLink').value = 
+        `${window.location.origin}/shop.html?session=${sessionId}`;
+});
+
+function showShopControls() {
+    document.getElementById('shopControls').style.display = 'block';
+    document.getElementById('releaseBtn').style.display = 'block';
 }
 
-let currentStage = 'A';
+function renderTranscript(transcript) {
+    const area = document.getElementById('transcriptArea');
+    area.innerHTML = transcript.map(t => `
+        <div class="transcript-turn ${t.speaker}">
+            <span class="speaker-label">${t.speaker === 'interviewer' ? 'Interviewer' : 'Teilnehmer'}</span>
+            <p>${t.text}</p>
+        </div>
+    `).join('');
+}
 
-async function loadSessionData() {
+function renderProfile(profile) {
+    const el = document.getElementById('profileContent');
+    const fields = [
+        ['Name', profile.name],
+        ['Alter', profile.age],
+        ['Stadt', profile.city],
+        ['Interessen', (profile.interests || []).join(', ')],
+        ['Shopping', (profile.shopping_habits || []).join(', ')],
+        ['Marken', (profile.brands || []).join(', ')],
+        ['Lebenslage', (profile.life_events || []).join(', ')],
+        ['Preissensitiv', profile.price_sensitivity],
+        ['Erwähnte Produkte', (profile.mentioned_products || []).join(', ')],
+        ['Subtile Details', (profile.subtle_details || []).join(', ')],
+    ];
+    
+    el.innerHTML = fields
+        .filter(([, v]) => v && v !== 'null')
+        .map(([k, v]) => `<div class="profile-row"><span class="profile-key">${k}</span><span class="profile-val">${v}</span></div>`)
+        .join('');
+    
+    document.getElementById('profileCard').style.display = 'block';
+}
+
+// Poll for updates
+async function pollStatus() {
     try {
-        const response = await fetch(`/api/stage?session=${sessionId}`);
-        if (!response.ok) throw new Error('Failed to load session');
+        const res = await fetch(`/api/session/status?session=${sessionId}`);
+        const data = await res.json();
         
-        const data = await response.json();
-        currentStage = data.stage;
+        document.getElementById('statusText').textContent = data.progress || data.status;
         
-        // Highlight active stage
-        document.querySelectorAll('.btn-stage').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.stage === currentStage) {
-                btn.classList.add('active');
-            }
-        });
-        
-        // Display participant data
-        if (data.userData) {
-            const ud = data.userData;
-            document.getElementById('participantData').innerHTML = `
-                <p><strong>Vorname:</strong> ${ud.firstName}</p>
-                <p><strong>Alter:</strong> ${ud.age}</p>
-                <p><strong>Stadt:</strong> ${ud.city}</p>
-                <p><strong>Interessen:</strong> ${ud.interests}</p>
-                <p><strong>Letzte Käufe:</strong> ${ud.lastPurchase}</p>
-                <p><strong>Lebenssituation:</strong> ${ud.lifestyle}</p>
-                <p><strong>Gesundheitsfokus:</strong> ${ud.healthFocus || 'nicht angegeben'}</p>
-            `;
+        if (data.transcript) {
+            renderTranscript(data.transcript);
+            document.getElementById('transcriptStatus').textContent = 'Fertig';
+            document.getElementById('transcriptStatus').classList.add('done');
         }
         
-    } catch (error) {
-        console.error('Error loading session:', error);
-        document.getElementById('errorMessage').textContent = 'Fehler beim Laden der Session-Daten.';
-        document.getElementById('errorMessage').style.display = 'block';
+        if (data.profile) {
+            renderProfile(data.profile);
+            document.getElementById('levelCard').style.display = 'block';
+        }
+        
+        if (data.status === 'shop_generated' || data.status === 'shop_ready') {
+            showShopControls();
+        }
+        
+        // Keep polling unless done
+        if (!['profile_ready', 'shop_generated', 'shop_ready', 'error'].includes(data.status)) {
+            setTimeout(pollStatus, 2000);
+        }
+    } catch (err) {
+        setTimeout(pollStatus, 3000);
     }
 }
 
-async function setStage(stage) {
-    try {
-        const response = await fetch('/api/set-stage', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session: sessionId,
-                stage: stage
-            })
-        });
-        
-        if (!response.ok) throw new Error('Failed to set stage');
-        
-        currentStage = stage;
-        
-        // Update UI
-        document.querySelectorAll('.btn-stage').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.stage === stage) {
-                btn.classList.add('active');
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error setting stage:', error);
-        alert('Fehler beim Wechseln der Stage. Bitte versuchen Sie es erneut.');
-    }
-}
-
-// Poll for updates (in case of external changes)
-setInterval(loadSessionData, 5000);
+pollStatus();

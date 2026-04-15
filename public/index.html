@@ -7,16 +7,34 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="container">
-        <div style="text-align: center; padding: 20px 0;">
-            <h1 style="font-size: 48px; font-weight: 600; margin-bottom: 16px; letter-spacing: -0.03em;">NOVA</h1>
-            <p style="margin-bottom: 48px; color: var(--text-secondary); font-size: 16px;">
-                Vielen Dank für Ihre Teilnahme am Interview
-            </p>
-            <a href="fragebogen.html" class="btn-primary" style="display: inline-block; text-decoration: none; max-width: 320px; margin: 0 auto;">
-                Jetzt beginnen
-            </a>
-        </div>
+    <div class="container" style="text-align: center;">
+        <h1 style="font-size: 56px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.04em;">NOVA</h1>
+        <p class="subtitle" style="margin-bottom: 48px; max-width: 400px; margin-left: auto; margin-right: auto;">
+            Vielen Dank, dass Sie sich die Zeit nehmen. Wir starten gleich mit einem kurzen Gespräch.
+        </p>
+        <button class="btn-primary" id="startBtn" style="max-width: 320px; margin: 0 auto;">
+            Mikrofon aktivieren & starten
+        </button>
+        <p id="micError" style="color: #dc2626; margin-top: 16px; font-size: 14px; display: none;">
+            Mikrofon-Zugriff wurde verweigert. Bitte erlauben Sie den Zugriff.
+        </p>
     </div>
+    <script>
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.textContent = 'Mikrofon wird aktiviert...';
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                const res = await fetch('/api/session/create', { method: 'POST' });
+                const data = await res.json();
+                window.location.href = '/interview.html?session=' + data.sessionId;
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = 'Mikrofon aktivieren & starten';
+                document.getElementById('micError').style.display = 'block';
+            }
+        });
+    </script>
 </body>
 </html>

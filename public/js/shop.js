@@ -1,247 +1,194 @@
-// Get session ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('session');
+if (!sessionId) window.location.href = '/';
 
-if (!sessionId) {
-    window.location.href = '/fragebogen.html';
-}
+let currentStage = null;
+let shopData = null;
+let profile = null;
 
-let currentStage = 'A';
+// Generic fallback products
+const GENERIC_PRODUCTS = [
+    { name: 'Classic T-Shirt', price: '29,99 €', image: '', shop: 'NOVA', rating: 4.5, reviews: 124 },
+    { name: 'Wireless Kopfhörer', price: '79,99 €', image: '', shop: 'NOVA', rating: 4.7, reviews: 203 },
+    { name: 'Fitness Tracker', price: '49,99 €', image: '', shop: 'NOVA', rating: 4.3, reviews: 89 },
+    { name: 'Küchenwaage Premium', price: '24,99 €', image: '', shop: 'NOVA', rating: 4.6, reviews: 156 },
+    { name: 'Pflegeset Natural', price: '39,99 €', image: '', shop: 'NOVA', rating: 4.4, reviews: 67 },
+    { name: 'Bestseller des Monats', price: '16,99 €', image: '', shop: 'NOVA', rating: 4.8, reviews: 312 },
+    { name: 'Trinkflasche 750ml', price: '22,99 €', image: '', shop: 'NOVA', rating: 4.5, reviews: 178 },
+    { name: 'Leder Geldbörse', price: '44,99 €', image: '', shop: 'NOVA', rating: 4.6, reviews: 95 }
+];
 
-// Poll for stage updates
-async function updateRecommendations() {
-    try {
-        const response = await fetch(`/api/stage?session=${sessionId}`);
-        if (!response.ok) throw new Error('Failed to fetch stage');
-        
-        const data = await response.json();
-        
-        if (data.stage !== currentStage) {
-            currentStage = data.stage;
-            renderRecommendations(data);
-        }
-    } catch (error) {
-        console.error('Error updating recommendations:', error);
-    }
-}
-
-function renderRecommendations(data) {
-    const title = document.getElementById('rec-title');
-    const subtitle = document.getElementById('rec-subtitle');
-    const grid = document.getElementById('recommendations-grid');
+function renderProductCard(product, stage) {
+    const hasImage = product.image && product.image.startsWith('http');
+    const imageHtml = hasImage
+        ? `<img src="${product.image}" alt="${product.name}" onerror="this.parentElement.innerHTML='<div class=product-img-placeholder>📦</div>'">`
+        : '<div class="product-img-placeholder">📦</div>';
     
-    switch (data.stage) {
-        case 'A':
-            // Stage A: Generic bestsellers
-            title.textContent = 'Bestseller der Woche';
-            subtitle.textContent = 'Die meistverkauften Produkte';
-            grid.innerHTML = renderGenericProducts();
-            break;
-            
-        case 'B':
-            // Stage B: Interest-based
-            title.textContent = 'Basierend auf Ihren Interessen';
-            subtitle.textContent = 'Produkte, die zu Ihren Hobbys passen';
-            grid.innerHTML = renderInterestProducts(data);
-            break;
-            
-        case 'C':
-            // Stage C: Hyper-personalized (creepy)
-            title.textContent = 'Genau für Sie zusammengestellt';
-            subtitle.textContent = '';
-            grid.innerHTML = renderPersonalizedProducts(data, false);
-            break;
-            
-        case 'D':
-            // Stage D: Transparent
-            title.textContent = 'Ihre persönlichen Empfehlungen';
-            subtitle.textContent = 'Basierend auf den Informationen, die Sie uns gegeben haben';
-            grid.innerHTML = renderPersonalizedProducts(data, true);
-            break;
-    }
-}
+    const badge = product.personalLabel && stage !== 'generic'
+        ? `<div class="product-badge">${stage === 'transparent' ? 'Empfohlen' : 'Für Sie'}</div>`
+        : '';
+    
+    const personalMsg = product.personalLabel && stage !== 'generic'
+        ? `<div class="personalized-message">${product.personalLabel}</div>`
+        : '';
+    
+    const transparency = product.transparencyReason && stage === 'transparent'
+        ? `<div class="transparency-box"><strong>Warum diese Empfehlung?</strong>${product.transparencyReason}</div>`
+        : '';
+    
+    const rating = product.rating
+        ? `<div class="product-rating">${'★'.repeat(Math.round(product.rating))}${'☆'.repeat(5 - Math.round(product.rating))} <span>(${product.reviews || ''})</span></div>`
+        : '';
 
-function renderGenericProducts() {
     return `
         <div class="product-card-new">
-            <div class="product-image-new">
-                <div class="product-badge">Bestseller</div>
-                <div class="product-img-placeholder">⌚</div>
-            </div>
+            <div class="product-image-new">${badge}${imageHtml}</div>
             <div class="product-info-new">
-                <h3 class="product-name">Smartwatch Pro</h3>
-                <p class="product-brand">NOVA Tech</p>
-                <div class="product-rating">★★★★★ <span>(156)</span></div>
-                <div class="product-price-new">
-                    <span class="price-current">149,99 €</span>
-                </div>
-            </div>
-        </div>
-        <div class="product-card-new">
-            <div class="product-image-new">
-                <div class="product-img-placeholder">👟</div>
-            </div>
-            <div class="product-info-new">
-                <h3 class="product-name">Running Schuhe</h3>
-                <p class="product-brand">NOVA Sport</p>
-                <div class="product-rating">★★★★☆ <span>(203)</span></div>
-                <div class="product-price-new">
-                    <span class="price-current">89,99 €</span>
-                </div>
-            </div>
-        </div>
-        <div class="product-card-new">
-            <div class="product-image-new">
-                <div class="product-badge sale">-15%</div>
-                <div class="product-img-placeholder">📱</div>
-            </div>
-            <div class="product-info-new">
-                <h3 class="product-name">Smartphone Halter</h3>
-                <p class="product-brand">NOVA Tech</p>
-                <div class="product-rating">★★★★★ <span>(89)</span></div>
-                <div class="product-price-new">
-                    <span class="price-original">22,99 €</span>
-                    <span class="price-current">19,99 €</span>
-                </div>
-            </div>
-        </div>
-        <div class="product-card-new">
-            <div class="product-image-new">
-                <div class="product-img-placeholder">🎒</div>
-            </div>
-            <div class="product-info-new">
-                <h3 class="product-name">Outdoor Rucksack</h3>
-                <p class="product-brand">NOVA Adventure</p>
-                <div class="product-rating">★★★★★ <span>(124)</span></div>
-                <div class="product-price-new">
-                    <span class="price-current">64,99 €</span>
-                </div>
+                ${personalMsg}
+                <h3 class="product-name">${product.name}</h3>
+                <p class="product-brand">${product.shop || 'NOVA'}</p>
+                ${rating}
+                ${transparency}
+                <div class="product-price-new"><span class="price-current">${product.price}</span></div>
             </div>
         </div>
     `;
 }
 
-function renderInterestProducts(data) {
-    const interests = data.userData?.interests || '';
-    const interestList = interests.split(',').map(i => i.trim());
+function renderGenericShop() {
+    document.getElementById('topBar').textContent = 'Kostenloser Versand ab 50€ | 30 Tage Rückgaberecht';
+    document.getElementById('greeting').textContent = '';
+    document.getElementById('heroHeadline').textContent = 'Frühjahr Kollektion 2026';
+    document.getElementById('heroSubtext').textContent = 'Entdecke die neuesten Trends';
+    document.getElementById('heroCta').textContent = 'Jetzt shoppen';
     
-    let products = '';
+    // Reset nav
+    document.getElementById('mainNav').innerHTML = 
+        ['Neu', 'Bestseller', 'Mode', 'Sport', 'Tech', 'Lifestyle']
+        .map(c => `<a href="#">${c}</a>`).join('');
     
-    if (interestList.some(i => i.toLowerCase().includes('sport') || i.toLowerCase().includes('lauf') || i.toLowerCase().includes('fitness'))) {
-        products += `
-            <div class="product-card-new">
-                <div class="product-image-new">
-                    <div class="product-badge">Für Sie empfohlen</div>
-                    <div class="product-img-placeholder">🏃</div>
-                </div>
-                <div class="product-info-new">
-                    <h3 class="product-name">Premium Laufschuhe</h3>
-                    <p class="product-brand">NOVA Run</p>
-                    <div class="product-rating">★★★★★ <span>(178)</span></div>
-                    <div class="product-price-new">
-                        <span class="price-current">119,99 €</span>
-                    </div>
-                </div>
+    // Render generic products
+    document.getElementById('shopSections').innerHTML = `
+        <section class="recommendations-section">
+            <div class="section-header">
+                <div><h2 class="section-title-new">Unsere Empfehlungen</h2>
+                <p class="section-subtitle-new">Die beliebtesten Produkte dieser Woche</p></div>
+                <a href="#" class="view-all">Alle ansehen →</a>
             </div>
-        `;
-    }
-    
-    if (interestList.some(i => i.toLowerCase().includes('koch') || i.toLowerCase().includes('essen'))) {
-        products += `
-            <div class="product-card-new">
-                <div class="product-image-new">
-                    <div class="product-badge">Für Sie empfohlen</div>
-                    <div class="product-img-placeholder">🍳</div>
-                </div>
-                <div class="product-info-new">
-                    <h3 class="product-name">Profi Koch-Messer Set</h3>
-                    <p class="product-brand">NOVA Kitchen</p>
-                    <div class="product-rating">★★★★★ <span>(234)</span></div>
-                    <div class="product-price-new">
-                        <span class="price-current">89,99 €</span>
-                    </div>
-                </div>
+            <div class="products-grid-new">
+                ${GENERIC_PRODUCTS.map(p => renderProductCard(p, 'generic')).join('')}
             </div>
-        `;
-    }
-    
-    if (interestList.some(i => i.toLowerCase().includes('gam') || i.toLowerCase().includes('spiel'))) {
-        products += `
-            <div class="product-card-new">
-                <div class="product-image-new">
-                    <div class="product-badge">Für Sie empfohlen</div>
-                    <div class="product-img-placeholder">🎮</div>
-                </div>
-                <div class="product-info-new">
-                    <h3 class="product-name">Gaming Headset Pro</h3>
-                    <p class="product-brand">NOVA Gaming</p>
-                    <div class="product-rating">★★★★★ <span>(312)</span></div>
-                    <div class="product-price-new">
-                        <span class="price-current">79,99 €</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    // Add generic fallback
-    products += `
-        <div class="product-card-new">
-            <div class="product-image-new">
-                <div class="product-img-placeholder">📖</div>
-            </div>
-            <div class="product-info-new">
-                <h3 class="product-name">Bestseller Buch</h3>
-                <p class="product-brand">NOVA Publishing</p>
-                <div class="product-rating">★★★★☆ <span>(89)</span></div>
-                <div class="product-price-new">
-                    <span class="price-current">16,99 €</span>
-                </div>
-            </div>
-        </div>
+        </section>
     `;
     
-    return products;
+    renderGenericTrustBadges();
 }
 
-function renderPersonalizedProducts(data, showTransparency) {
-    if (!data.recommendations || data.recommendations.length === 0) {
-        return '<p class="loading">Empfehlungen werden geladen...</p>';
+function renderPersonalizedShop(data, stage) {
+    const sd = data;
+    const stageKey = stage === 'generic' ? 'generic' : 'personalized';
+    
+    // Top bar
+    const banner = sd.topBanner;
+    document.getElementById('topBar').textContent = 
+        typeof banner === 'object' ? (banner[stageKey] || banner.generic) : banner;
+    
+    // Greeting
+    const greet = sd.greeting;
+    document.getElementById('greeting').textContent = 
+        stage !== 'generic' ? (typeof greet === 'object' ? (greet.personalized || '') : greet) : '';
+    
+    // Hero
+    const hero = sd.hero;
+    const heroData = typeof hero === 'object' && hero[stageKey] ? hero[stageKey] : hero.generic || hero;
+    document.getElementById('heroHeadline').textContent = heroData.headline || 'Frühjahr Kollektion 2026';
+    document.getElementById('heroSubtext').textContent = heroData.subtext || 'Entdecke die neuesten Trends';
+    document.getElementById('heroCta').textContent = heroData.cta || 'Jetzt shoppen';
+    
+    // Nav
+    const nav = sd.navCategories;
+    const navItems = typeof nav === 'object' && !Array.isArray(nav)
+        ? (nav[stageKey] || nav.generic || ['Neu', 'Bestseller', 'Mode'])
+        : (nav || ['Neu', 'Bestseller', 'Mode']);
+    document.getElementById('mainNav').innerHTML = navItems.map(c => `<a href="#">${c}</a>`).join('');
+    
+    // Sections
+    const sections = sd.sections || [];
+    let sectionsHtml = '';
+    
+    for (const section of sections) {
+        if (!section.products || section.products.length === 0) continue;
+        
+        const title = typeof section.title === 'object' 
+            ? (section.title[stageKey] || section.title.generic) 
+            : section.title;
+        const subtitle = typeof section.subtitle === 'object'
+            ? (section.subtitle[stageKey] || section.subtitle.generic)
+            : section.subtitle;
+        
+        if (!title) continue;
+        
+        sectionsHtml += `
+            <section class="recommendations-section">
+                <div class="section-header">
+                    <div><h2 class="section-title-new">${title}</h2>
+                    ${subtitle ? `<p class="section-subtitle-new">${subtitle}</p>` : ''}</div>
+                    <a href="#" class="view-all">Alle ansehen →</a>
+                </div>
+                <div class="products-grid-new">
+                    ${section.products.map(p => renderProductCard(p, stage)).join('')}
+                </div>
+            </section>
+        `;
     }
     
-    return data.recommendations.map(rec => `
-        <div class="product-card-new">
-            <div class="product-image-new">
-                ${!showTransparency ? '<div class="product-badge">Speziell für Sie</div>' : '<div class="product-badge">Empfohlen</div>'}
-                <div class="product-img-placeholder">${rec.emoji}</div>
-            </div>
-            <div class="product-info-new">
-                ${rec.personalMessage && !showTransparency ? `<div class="personalized-message">${rec.personalMessage}</div>` : ''}
-                <h3 class="product-name">${rec.title}</h3>
-                <p class="product-brand">NOVA Premium</p>
-                ${rec.description ? `<div class="product-rating">★★★★★ <span>(${Math.floor(Math.random() * 200 + 50)})</span></div>` : ''}
-                ${showTransparency && rec.reason ? `
-                    <div class="transparency-box">
-                        <strong>Warum diese Empfehlung?</strong>
-                        ${rec.reason}
-                    </div>
-                ` : ''}
-                <div class="product-price-new">
-                    <span class="price-current">${rec.price}</span>
-                </div>
-            </div>
-        </div>
-    `).join('');
+    document.getElementById('shopSections').innerHTML = sectionsHtml || '<p style="text-align:center;padding:40px;color:#666;">Keine Produkte verfügbar.</p>';
+    
+    // Trust badges
+    if (sd.trustBadges && stage !== 'generic') {
+        renderCustomTrustBadges(sd.trustBadges, stageKey);
+    } else {
+        renderGenericTrustBadges();
+    }
 }
 
-// Initial load and polling
-async function init() {
-    await updateRecommendations();
-    // Force render even if stage hasn't changed
-    const response = await fetch(`/api/stage?session=${sessionId}`);
-    const data = await response.json();
-    renderRecommendations(data);
+function renderGenericTrustBadges() {
+    document.getElementById('trustBadges').innerHTML = `
+        <div class="trust-badge"><span class="trust-icon">✓</span><div><strong>Schneller Versand</strong><p>1-3 Werktage</p></div></div>
+        <div class="trust-badge"><span class="trust-icon">↺</span><div><strong>Einfache Rückgabe</strong><p>30 Tage kostenlos</p></div></div>
+        <div class="trust-badge"><span class="trust-icon">🔒</span><div><strong>Sicherer Kauf</strong><p>SSL verschlüsselt</p></div></div>
+    `;
 }
 
-init();
-setInterval(updateRecommendations, 2000); // Poll every 2 seconds
+function renderCustomTrustBadges(badges, stageKey) {
+    const icons = { truck: '✓', return: '↺', lock: '🔒' };
+    document.getElementById('trustBadges').innerHTML = badges.map(b => {
+        const title = typeof b.title === 'object' ? (b.title[stageKey] || b.title.generic) : b.title;
+        const text = typeof b.text === 'object' ? (b.text[stageKey] || b.text.generic) : b.text;
+        return `<div class="trust-badge"><span class="trust-icon">${icons[b.icon] || '✓'}</span><div><strong>${title}</strong><p>${text}</p></div></div>`;
+    }).join('');
+}
+
+async function fetchAndRender() {
+    try {
+        const res = await fetch(`/api/shop/data?session=${sessionId}`);
+        const data = await res.json();
+        
+        if (data.stage !== currentStage || !shopData) {
+            currentStage = data.stage;
+            shopData = data.shopData;
+            profile = data.profile;
+            
+            if (currentStage === 'generic' || !shopData) {
+                renderGenericShop();
+            } else {
+                renderPersonalizedShop(shopData, currentStage);
+            }
+        }
+    } catch (err) {
+        console.error('Fetch error:', err);
+    }
+}
+
+fetchAndRender();
+setInterval(fetchAndRender, 2000);

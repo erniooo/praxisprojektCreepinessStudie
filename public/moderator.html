@@ -3,49 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moderator Panel - NOVA Shop</title>
+    <title>Moderator Panel</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-    <div class="container">
-        <div class="moderator-panel">
-            <h2>🎛️ Moderator Panel</h2>
-            
-            <div class="session-info" id="sessionInfo">
-                <p><strong>Session ID:</strong> <span id="sessionId">-</span></p>
-                <p><strong>Teilnehmer-Link:</strong></p>
-                <p><a href="#" id="participantLink" style="color: #60a5fa; word-break: break-all;" target="_blank">-</a></p>
+<body class="mod-body">
+    <div class="mod-container">
+        <!-- Left Column: Transcript -->
+        <div class="mod-left">
+            <div class="mod-section-header">
+                <h2>Transkript</h2>
+                <span class="mod-badge" id="transcriptStatus">Wird geladen...</span>
+            </div>
+            <div class="transcript-area" id="transcriptArea">
+                <p class="mod-placeholder">Warte auf Transkription...</p>
+            </div>
+        </div>
+
+        <!-- Right Column: Controls -->
+        <div class="mod-right">
+            <!-- Status -->
+            <div class="mod-card">
+                <h3>Status</h3>
+                <p id="statusText" class="mod-status-text">Verarbeite Audio...</p>
+                <div class="mod-progress-bar">
+                    <div class="mod-progress-fill" id="progressBar"></div>
+                </div>
             </div>
 
-            <h3 style="margin-bottom: 12px; font-size: 16px;">Aktuelle Stage:</h3>
-            <div class="stage-buttons">
-                <button class="btn-stage" data-stage="A" onclick="setStage('A')">
-                    <strong>Stage A</strong><br>
-                    <small>Generisch / Baseline</small>
-                </button>
-                <button class="btn-stage" data-stage="B" onclick="setStage('B')">
-                    <strong>Stage B</strong><br>
-                    <small>Interessenbasiert</small>
-                </button>
-                <button class="btn-stage" data-stage="C" onclick="setStage('C')">
-                    <strong>Stage C</strong><br>
-                    <small>Hyperpersonalisiert (Creepy)</small>
-                </button>
-                <button class="btn-stage" data-stage="D" onclick="setStage('D')">
-                    <strong>Stage D</strong><br>
-                    <small>Transparent erklärt</small>
-                </button>
+            <!-- Profile -->
+            <div class="mod-card" id="profileCard" style="display: none;">
+                <h3>Extrahiertes Profil</h3>
+                <div id="profileContent" class="mod-profile"></div>
             </div>
 
-            <h3 style="margin-bottom: 12px; font-size: 16px;">Teilnehmer-Daten:</h3>
-            <div class="participant-data" id="participantData">
-                <p>Lade Daten...</p>
+            <!-- Level Slider -->
+            <div class="mod-card" id="levelCard" style="display: none;">
+                <h3>Personalisierungs-Level</h3>
+                <input type="range" min="1" max="5" value="3" class="mod-slider" id="levelSlider">
+                <div class="mod-level-labels">
+                    <span>1 Subtil</span>
+                    <span>2</span>
+                    <span>3</span>
+                    <span>4</span>
+                    <span>5 Extrem</span>
+                </div>
+                <p class="mod-level-desc" id="levelDesc">Stark: Interessen-spezifische Produkte, persönliche Nachrichten</p>
+                <button class="btn-generate" id="generateBtn">Shop generieren</button>
             </div>
 
-            <div id="errorMessage" class="error" style="display: none;"></div>
+            <!-- Shop Controls (after generation) -->
+            <div class="mod-card" id="shopControls" style="display: none;">
+                <h3>Shop-Steuerung</h3>
+                <div class="stage-buttons-mod">
+                    <button class="btn-stage-mod active" data-stage="generic">Generic (Baseline)</button>
+                    <button class="btn-stage-mod" data-stage="personalized">Personalisiert</button>
+                    <button class="btn-stage-mod" data-stage="transparent">Transparent</button>
+                </div>
+                <button class="btn-release" id="releaseBtn" style="display: none;">Shop für Teilnehmer freigeben</button>
+                <div class="mod-link-box" id="linkBox" style="display: none;">
+                    <label>Teilnehmer-Link:</label>
+                    <input type="text" id="participantLink" readonly>
+                </div>
+            </div>
         </div>
     </div>
-
     <script src="js/moderator.js"></script>
 </body>
 </html>
