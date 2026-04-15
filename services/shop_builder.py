@@ -5,6 +5,7 @@ from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
     PERSONALIZATION_MODEL,
+    PERSONALIZATION_REASONING_EFFORT,
     SHOP_TOKEN_LIMIT,
 )
 
@@ -150,11 +151,12 @@ WICHTIG:
 - "personal_picks" soll 4 Produkte haben (nur bei Level >= 2)
 - "local" soll 4 Produkte haben (nur bei Level >= 2)
 - Bei Level 1: nur "recommendations" Sektion befüllen
-- personalLabel und transparencyReason für JEDES Produkt schreiben"""
+- personalLabel und transparencyReason für JEDES Produkt schreiben
+- Halte alle Texte kurz: personalLabel max. 10 Woerter, transparencyReason max. 22 Woerter"""
             }
         ],
         response_format=JSON_RESPONSE_FORMAT,
-        temperature=0.6,
+        reasoning_effort=PERSONALIZATION_REASONING_EFFORT,
         max_completion_tokens=SHOP_TOKEN_LIMIT
     )
     

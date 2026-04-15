@@ -4,6 +4,7 @@ from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
     PERSONALIZATION_MODEL,
+    PERSONALIZATION_REASONING_EFFORT,
     SPEAKER_TOKEN_LIMIT,
 )
 
@@ -41,7 +42,7 @@ Antworte in diesem Format:
             }
         ],
         response_format=JSON_RESPONSE_FORMAT,
-        temperature=0.3,
+        reasoning_effort=PERSONALIZATION_REASONING_EFFORT,
         max_completion_tokens=SPEAKER_TOKEN_LIMIT
     )
 

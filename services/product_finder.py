@@ -6,6 +6,7 @@ from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
     PERSONALIZATION_MODEL,
+    PERSONALIZATION_REASONING_EFFORT,
     SEARCH_QUERY_TOKEN_LIMIT,
 )
 
@@ -38,7 +39,7 @@ Antworte NUR mit einem JSON-Objekt in diesem Format:
             }
         ],
         response_format=JSON_RESPONSE_FORMAT,
-        temperature=0.7,
+        reasoning_effort=PERSONALIZATION_REASONING_EFFORT,
         max_completion_tokens=SEARCH_QUERY_TOKEN_LIMIT
     )
     
