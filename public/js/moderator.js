@@ -130,7 +130,19 @@ function showShopControls() {
     el('releaseBtn').style.display = 'block';
     el('ratingsBtn').style.display = 'block';
     el('stageScriptCard').style.display = 'block';
+    renderExportLinks();
     renderStageScript();
+}
+
+function renderExportLinks() {
+    const box = el('exportBox');
+    const jsonLink = el('exportJsonLink');
+    const csvLink = el('exportCsvLink');
+    if (!box || !jsonLink || !csvLink) return;
+
+    jsonLink.href = `/api/session/export?session=${encodeURIComponent(sessionId)}&format=json`;
+    csvLink.href = `/api/session/export?session=${encodeURIComponent(sessionId)}&format=csv`;
+    box.style.display = 'block';
 }
 
 function renderRatingsSummary(data) {
@@ -152,6 +164,7 @@ function renderRatingsSummary(data) {
     }
 
     result.style.display = 'block';
+    result.style.opacity = '1';
     result.innerHTML = entries.map(entry => {
         const ratings = entry.ratings || {};
         return `

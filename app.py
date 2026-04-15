@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, Response, abort
 from flask_cors import CORS
+import csv
+import io
 import json
 import os
 import requests
@@ -69,6 +71,121 @@ def save_session(session_id):
             json.dump(safe, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving session {session_id}: {e}")
+
+
+def get_session(session_id):
+    if not session_id:
+        return None
+    if session_id in sessions:
+        return sessions[session_id]
+
+    try:
+        uuid.UUID(session_id)
+    except (TypeError, ValueError):
+        return None
+
+    path = os.path.join(STORAGE_SESSIONS, f'{session_id}.json')
+    if not os.path.exists(path):
+        return None
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            sessions[session_id] = json.load(f)
+        return sessions[session_id]
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Error loading session {session_id}: {e}")
+        return None
+
+
+def build_export_payload(session_id, session):
+    shop = session.get('shop_data') or {}
+    products = []
+    for section in shop.get('sections') or []:
+        for product in section.get('products') or []:
+            products.append({
+                'sectionId': section.get('id'),
+                'sectionTitle': section.get('title'),
+                'name': product.get('name'),
+                'price': product.get('price'),
+                'shop': product.get('shop'),
+                'searchQuery': product.get('search_query'),
+                'personalLabel': product.get('personalLabel'),
+                'transparencyReason': product.get('transparencyReason'),
+                'whyDetails': product.get('whyDetails'),
+                'signalKeys': product.get('signalKeys'),
+                'isCreepyMoment': product.get('isCreepyMoment'),
+            })
+
+    return {
+        'sessionId': session_id,
+        'exportedAt': now_iso(),
+        'status': session.get('status'),
+        'stage': session.get('stage'),
+        'level': session.get('level'),
+        'releasedAt': session.get('released_at'),
+        'profile': session.get('profile'),
+        'transcript': session.get('transcript'),
+        'rawTranscript': session.get('raw_transcript'),
+        'ratingsLatest': session.get('ratings'),
+        'ratingsByStage': session.get('ratings_by_stage') or {},
+        'interactionEvents': session.get('interaction_events') or [],
+        'stageHistory': session.get('stage_history') or [],
+        'moderatorNotes': session.get('moderator_notes') or {},
+        'shopMetadata': {
+            'usedSignals': shop.get('usedSignals') or [],
+            'creepyMoment': shop.get('creepyMoment'),
+            'stageMetadata': shop.get('stageMetadata'),
+            'explanationDetails': shop.get('explanationDetails'),
+            'controlOptions': shop.get('controlOptions') or [],
+        },
+        'products': products,
+    }
+
+
+def ratings_csv(session_id, session):
+    rows = []
+    ratings_by_stage = session.get('ratings_by_stage') or {}
+    for item in sorted(ratings_by_stage.values(), key=lambda entry: entry.get('timestamp') or ''):
+        ratings = item.get('ratings') or {}
+        rows.append({
+            'session_id': session_id,
+            'stage': item.get('stage'),
+            'timestamp': item.get('timestamp'),
+            'level': session.get('level'),
+            'helpfulness': ratings.get('helpfulness'),
+            'comprehensibility': ratings.get('comprehensibility'),
+            'creepiness': ratings.get('creepiness'),
+            'trust': ratings.get('trust'),
+        })
+
+    if not rows and session.get('ratings'):
+        ratings = session.get('ratings') or {}
+        rows.append({
+            'session_id': session_id,
+            'stage': session.get('stage'),
+            'timestamp': '',
+            'level': session.get('level'),
+            'helpfulness': ratings.get('helpfulness'),
+            'comprehensibility': ratings.get('comprehensibility'),
+            'creepiness': ratings.get('creepiness'),
+            'trust': ratings.get('trust'),
+        })
+
+    output = io.StringIO()
+    fieldnames = [
+        'session_id',
+        'stage',
+        'timestamp',
+        'level',
+        'helpfulness',
+        'comprehensibility',
+        'creepiness',
+        'trust',
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)
+    return output.getvalue()
 
 
 def process_audio_pipeline(session_id, audio_path):
@@ -296,10 +413,10 @@ def save_moderator_note():
 @app.route('/api/session/status', methods=['GET'])
 def session_status():
     session_id = request.args.get('session')
-    if not session_id or session_id not in sessions:
+    s = get_session(session_id)
+    if not s:
         return jsonify({'error': 'Session not found'}), 404
 
-    s = sessions[session_id]
     result = {
         'status': s.get('status'),
         'progress': s.get('progress'),
@@ -330,6 +447,37 @@ def session_status():
         result['releasedAt'] = s['released_at']
 
     return jsonify(result)
+
+
+@app.route('/api/session/export', methods=['GET'])
+def export_session():
+    session_id = request.args.get('session')
+    export_format = (request.args.get('format') or 'json').lower()
+    session = get_session(session_id)
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+
+    if export_format == 'csv':
+        csv_content = ratings_csv(session_id, session)
+        return Response(
+            csv_content,
+            mimetype='text/csv; charset=utf-8',
+            headers={
+                'Content-Disposition': f'attachment; filename="session_{session_id}_ratings.csv"'
+            }
+        )
+
+    if export_format != 'json':
+        return jsonify({'error': 'Unsupported export format'}), 400
+
+    payload = build_export_payload(session_id, session)
+    return Response(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        mimetype='application/json; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="session_{session_id}_export.json"'
+        }
+    )
 
 
 @app.route('/api/shop/generate', methods=['POST'])
@@ -400,10 +548,10 @@ def set_stage():
 @app.route('/api/shop/data', methods=['GET'])
 def shop_data():
     session_id = request.args.get('session')
-    if not session_id or session_id not in sessions:
+    s = get_session(session_id)
+    if not s:
         return jsonify({'error': 'Session not found'}), 404
 
-    s = sessions[session_id]
     return jsonify({
         'stage': s.get('stage', 'generic'),
         'shopData': s.get('shop_data'),

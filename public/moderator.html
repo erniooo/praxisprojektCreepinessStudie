@@ -61,7 +61,14 @@
                 </div>
                 <button class="btn-release" id="releaseBtn" style="display: none;">Shop für Teilnehmer freigeben</button>
                 <button class="btn-ratings" id="ratingsBtn" style="display: none;">Mini-Ratings beim Teilnehmer anzeigen</button>
-                <p id="ratingsResult" style="display: none; margin-top: 12px; font-size: 13px; opacity: 0.7;"></p>
+                <div id="ratingsResult" style="display: none; margin-top: 12px; font-size: 13px; opacity: 0.7;"></div>
+                <div class="mod-export-box" id="exportBox" style="display: none;">
+                    <span>Session-Daten herunterladen</span>
+                    <div class="mod-export-actions">
+                        <a id="exportJsonLink" href="#" download>JSON Export</a>
+                        <a id="exportCsvLink" href="#" download>Ratings CSV</a>
+                    </div>
+                </div>
                 <div class="mod-link-box" id="linkBox" style="display: none;">
                     <label>Teilnehmer-Link:</label>
                     <input type="text" id="participantLink" readonly>
