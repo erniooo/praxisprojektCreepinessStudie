@@ -133,6 +133,66 @@ def upload_audio():
     return jsonify({'success': True})
 
 
+@app.route('/api/transcript/upload', methods=['POST'])
+def upload_transcript():
+    data = request.json
+    raw_transcript = data.get('transcript', '')
+
+    if not raw_transcript.strip():
+        return jsonify({'error': 'Empty transcript'}), 400
+
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = {
+        'status': 'uploading',
+        'progress': 'Transkript erhalten, starte Verarbeitung...',
+        'stage': 'generic',
+        'transcript': None,
+        'profile': None,
+        'shop_data': None,
+        'level': 3,
+        'raw_transcript': raw_transcript,
+        'ratings': None
+    }
+
+    def process_transcript_pipeline(sid, text):
+        try:
+            sessions[sid]['status'] = 'transcribing'
+            sessions[sid]['progress'] = 'Trenne Sprecher...'
+            speaker_turns = separate_speakers(text)
+            sessions[sid]['transcript'] = speaker_turns
+
+            sessions[sid]['progress'] = 'Extrahiere Profil...'
+            profile = extract_profile(speaker_turns)
+            sessions[sid]['profile'] = profile
+            sessions[sid]['status'] = 'profile_ready'
+            sessions[sid]['progress'] = 'Profil bereit. Wähle Personalisierungs-Level.'
+            save_session(sid)
+        except Exception as e:
+            print(f"Transcript pipeline error for {sid}: {e}")
+            sessions[sid]['status'] = 'error'
+            sessions[sid]['progress'] = f'Fehler: {str(e)}'
+
+    thread = threading.Thread(target=process_transcript_pipeline, args=(session_id, raw_transcript))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({'sessionId': session_id})
+
+
+@app.route('/api/ratings/save', methods=['POST'])
+def save_ratings():
+    data = request.json
+    session_id = data.get('session_id')
+    ratings = data.get('ratings')
+
+    if not session_id or session_id not in sessions:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    sessions[session_id]['ratings'] = ratings
+    save_session(session_id)
+    return jsonify({'success': True})
+
+
 @app.route('/api/session/status', methods=['GET'])
 def session_status():
     session_id = request.args.get('session')
@@ -154,6 +214,8 @@ def session_status():
         result['shopData'] = s['shop_data']
     if s.get('level'):
         result['level'] = s['level']
+    if s.get('ratings'):
+        result['ratings'] = s['ratings']
 
     return jsonify(result)
 
@@ -200,10 +262,14 @@ def set_stage():
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
 
-    if stage not in ('generic', 'personalized', 'transparent'):
+    if stage not in ('generic', 'personalized', 'transparent', 'show_ratings'):
         return jsonify({'error': 'Invalid stage'}), 400
 
-    sessions[session_id]['stage'] = stage
+    if stage == 'show_ratings':
+        sessions[session_id]['status'] = 'show_ratings'
+    else:
+        sessions[session_id]['stage'] = stage
+
     return jsonify({'success': True, 'stage': stage})
 
 

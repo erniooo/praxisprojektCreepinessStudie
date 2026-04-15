@@ -18,6 +18,19 @@
         <p id="micError" style="color: #dc2626; margin-top: 16px; font-size: 14px; display: none;">
             Mikrofon-Zugriff wurde verweigert. Bitte erlauben Sie den Zugriff.
         </p>
+
+        <div class="divider-or"><span>oder</span></div>
+
+        <button class="btn-secondary" id="uploadBtn" style="max-width: 320px; margin: 0 auto;">
+            Transkript hochladen
+        </button>
+        <input type="file" id="transcriptFile" accept=".txt,.json" style="display: none;">
+        <a href="/beispiel-transkript.txt" download class="example-link">Beispiel-Transkript herunterladen</a>
+
+        <div id="uploadFeedback" style="display: none; margin-top: 16px;">
+            <div class="upload-spinner" style="margin: 0 auto;"></div>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-top: 12px;">Transkript wird verarbeitet...</p>
+        </div>
     </div>
     <script>
         document.getElementById('startBtn').addEventListener('click', async () => {
@@ -33,6 +46,34 @@
                 btn.disabled = false;
                 btn.textContent = 'Mikrofon aktivieren & starten';
                 document.getElementById('micError').style.display = 'block';
+            }
+        });
+
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            document.getElementById('transcriptFile').click();
+        });
+
+        document.getElementById('transcriptFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            document.getElementById('uploadBtn').style.display = 'none';
+            document.getElementById('uploadFeedback').style.display = 'block';
+
+            const text = await file.text();
+            try {
+                const res = await fetch('/api/transcript/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript: text })
+                });
+                const data = await res.json();
+                window.open('/moderator.html?session=' + data.sessionId, '_blank');
+                window.location.href = '/waiting.html?session=' + data.sessionId;
+            } catch (err) {
+                alert('Fehler beim Hochladen. Bitte versuchen Sie es erneut.');
+                document.getElementById('uploadBtn').style.display = 'block';
+                document.getElementById('uploadFeedback').style.display = 'none';
             }
         });
     </script>

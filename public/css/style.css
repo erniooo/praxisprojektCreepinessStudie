@@ -1191,3 +1191,150 @@ small {
     font-weight: 500;
     color: var(--text-primary);
 }
+
+/* ===== DIVIDER OR ===== */
+.divider-or {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 28px auto;
+    max-width: 320px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.divider-or::before,
+.divider-or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.example-link {
+    display: block;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.2s;
+}
+
+.example-link:hover {
+    color: var(--text-primary);
+}
+
+/* ===== RATINGS OVERLAY ===== */
+.ratings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.ratings-card {
+    background: white;
+    border-radius: 20px;
+    padding: 48px;
+    max-width: 560px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.ratings-card h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+}
+
+.ratings-subtitle {
+    color: var(--text-secondary);
+    font-size: 15px;
+    margin-bottom: 36px;
+    line-height: 1.5;
+}
+
+.rating-item {
+    margin-bottom: 28px;
+}
+
+.rating-item label {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 12px;
+    font-weight: 400;
+    color: var(--text-primary);
+}
+
+.rating-scale {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rating-scale .scale-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 70px;
+    text-align: center;
+}
+
+.rating-scale .scale-label:first-child {
+    text-align: right;
+}
+
+.rating-scale .scale-label:last-child {
+    text-align: left;
+}
+
+.rating-scale button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-secondary);
+}
+
+.rating-scale button:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.rating-scale button.selected {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* ===== MOD RATINGS BUTTON ===== */
+.btn-ratings {
+    width: 100%;
+    padding: 14px;
+    background: #eab308;
+    color: black;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all 0.2s;
+}
+
+.btn-ratings:hover { background: #ca8a04; }
+.btn-ratings:disabled { opacity: 0.5; cursor: not-allowed; }

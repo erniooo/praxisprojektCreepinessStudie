@@ -192,3 +192,54 @@ async function fetchAndRender() {
 
 fetchAndRender();
 setInterval(fetchAndRender, 2000);
+
+// === Mini-Ratings ===
+const ratings = {};
+
+document.querySelectorAll('.rating-scale').forEach(scale => {
+    const key = scale.dataset.key;
+    scale.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            scale.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            ratings[key] = parseInt(btn.dataset.val);
+            // Enable submit if all 3 rated
+            if (ratings.helpfulness && ratings.comprehensibility && ratings.creepiness) {
+                document.getElementById('submitRatings').disabled = false;
+            }
+        });
+    });
+});
+
+document.getElementById('submitRatings').addEventListener('click', async () => {
+    const btn = document.getElementById('submitRatings');
+    btn.disabled = true;
+    btn.textContent = 'Wird gespeichert...';
+    try {
+        await fetch('/api/ratings/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, ratings })
+        });
+        document.getElementById('ratingsOverlay').innerHTML =
+            '<div class="ratings-card" style="text-align:center;"><h2>Vielen Dank!</h2><p class="ratings-subtitle">Ihre Bewertung wurde gespeichert.</p></div>';
+        setTimeout(() => {
+            document.getElementById('ratingsOverlay').style.display = 'none';
+        }, 3000);
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Bewertung abschicken';
+    }
+});
+
+// Listen for show_ratings status
+async function checkRatings() {
+    try {
+        const res = await fetch(`/api/session/status?session=${sessionId}`);
+        const data = await res.json();
+        if (data.status === 'show_ratings') {
+            document.getElementById('ratingsOverlay').style.display = 'flex';
+        }
+    } catch (err) {}
+}
+setInterval(checkRatings, 2000);

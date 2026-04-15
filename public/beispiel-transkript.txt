@@ -1,0 +1,43 @@
+Interviewer: Bevor wir starten, dieses Gespräch wird aufgezeichnet und transkribiert. Teile des Gesprächs werden anschließend verwendet, um eine personalisierte Shop-Seite zu erzeugen. Deine Teilnahme ist freiwillig, du kannst Fragen auslassen und das Interview jederzeit abbrechen. Bist du damit einverstanden?
+
+Teilnehmer: Ja, klar, bin ich einverstanden. Kein Problem.
+
+Interviewer: Super, danke dir. Dann erzähl mir doch mal kurz, wie du normalerweise online einkaufst.
+
+Teilnehmer: Also ich kaufe eigentlich ziemlich viel online ein. Hauptsächlich über Amazon, das ist einfach am bequemsten. Und dann Zalando für Klamotten, da bestelle ich so alle paar Wochen was. Ich vergleiche aber auch gerne Preise, also ich gehe oft erstmal auf Google und schaue wo es günstiger ist. Seit ich nach Köln gezogen bin, nutze ich auch öfter mal lokale Lieferdienste für Essen und so.
+
+Interviewer: Welche Shops oder Plattformen nutzt du am häufigsten?
+
+Teilnehmer: Auf jeden Fall Amazon, das ist so mein Go-To. Dann Zalando wie gesagt, About You manchmal. Für Technik gehe ich gerne auf Mediamarkt oder Alternate. Und seit kurzem bestelle ich auch ab und zu bei ASOS, weil die halt gute Angebote haben. Ach ja, und ich bin seit ein paar Monaten auf einem Nachhaltigkeitstrip, also kaufe ich auch mal bei Avocadostore ein. Das ist so ein nachhaltiger Online-Shop.
+
+Interviewer: Wie gehst du typischerweise vor, wenn du etwas suchst?
+
+Teilnehmer: Kommt drauf an. Wenn ich genau weiß was ich will, gebe ich das direkt bei Amazon ein. Wenn ich eher so stöbere, also zum Beispiel ein neues Outfit suche, dann gehe ich auf Zalando und lasse mich inspirieren. Ich achte ehrlich gesagt auch ziemlich auf Bewertungen, also wenn ein Produkt weniger als vier Sterne hat, kaufe ich es meistens nicht. Und Preise vergleiche ich schon, ich bin da eher so im mittleren Preissegment unterwegs, also nicht das Billigste, aber auch nicht übertrieben teuer.
+
+Interviewer: Wie oft achtest du dabei auf Produktempfehlungen oder Vorschläge?
+
+Teilnehmer: Also die „Wird oft zusammen gekauft"-Sachen bei Amazon klicke ich schon manchmal an. Und bei Zalando diese „Das könnte dir auch gefallen"-Vorschläge finde ich eigentlich ganz gut. Ich habe auch schon mal was gekauft, weil es mir vorgeschlagen wurde und es tatsächlich gepasst hat. Also grundsätzlich finde ich das schon nützlich.
+
+Interviewer: Wie stehst du generell zu personalisierten Empfehlungen beim Online-Shopping?
+
+Teilnehmer: Grundsätzlich finde ich das eine gute Sache, wenn es gut gemacht ist. Also wenn mir Sachen vorgeschlagen werden, die wirklich zu mir passen, dann spart mir das ja Zeit. Aber es gibt auch Momente, wo ich denke, okay, das ist jetzt ein bisschen weird. Zum Beispiel wenn ich auf meinem Laptop nach Laufschuhen suche und dann auf meinem Handy überall Werbung für Laufschuhe sehe. Das ist dann schon so, hmm, die verfolgen mich.
+
+Interviewer: Wann empfindest du Empfehlungen als hilfreich oder passend?
+
+Teilnehmer: Wenn sie wirklich zu dem passen, was ich gerade brauche. Also zum Beispiel, ich habe mir letztens eine Yogamatte gekauft und dann wurden mir Yogablöcke und ein Yoga-Handtuch vorgeschlagen, das war super, weil ich die tatsächlich auch gebraucht habe. Oder bei Musik, Spotify macht das richtig gut mit den Playlists. Aber bei Klamotten ist es manchmal komisch, weil sie mir Sachen vorschlagen, die überhaupt nicht mein Stil sind.
+
+Interviewer: Wann wirken Empfehlungen eher störend, unpassend oder übergriffig?
+
+Teilnehmer: Übergriffig ist ein gutes Wort. Also zum Beispiel habe ich mal nach einem Schwangerschaftstest gegoogelt, weil eine Freundin mich gebeten hat einen mitzubringen, und dann habe ich wochenlang Babywerbung bekommen. Das fand ich richtig unangenehm, weil das ja gar nicht meine Situation war. Oder wenn ich was Privates suche, wie Medikamente oder so, und dann überall Werbung dafür sehe. Da denke ich dann schon, okay, die wissen zu viel.
+
+Interviewer: Gab es schon einmal eine Empfehlung oder Werbung, bei der du dachtest: Das ist überraschend genau?
+
+Teilnehmer: Ja, tatsächlich! Ich habe mal mit einer Freundin am Telefon über Wanderschuhe geredet, also wirklich nur geredet, nicht gegoogelt oder so. Und am nächsten Tag hatte ich Werbung für Wanderschuhe auf Instagram. Das war so ein Moment, wo ich dachte, hören die mich ab? Ob das Zufall war, weiß ich nicht, aber es war schon beunruhigend. Und dann war da noch was: Ich hatte meiner Mitbewohnerin erzählt, dass ich mal wieder Lust auf Kochen habe und mir vielleicht ein neues Kochbuch holen will, und buchstäblich am nächsten Tag hat mir Amazon ein Kochbuch vorgeschlagen. Das war creepy.
+
+Interviewer: Was genau hat dieses Gefühl ausgelöst?
+
+Teilnehmer: Ich glaube es ist dieses Gefühl, dass jemand mithört oder mitliest, obwohl man das nicht erwartet. Also diese Grenze zwischen „die kennen meine Kaufhistorie" und „die kennen Gespräche, die ich im echten Leben führe" — wenn die überschritten wird, dann wird es unangenehm. Es ist so ein Kontrollverlust-Gefühl, als ob man beobachtet wird.
+
+Interviewer: Im nächsten Schritt wird auf Basis unseres Gesprächs eine Shop-Seite erzeugt. Schau dich bitte erst einmal frei um und sag laut, was dir auffällt, ohne dass du etwas bewerten musst.
+
+Teilnehmer: Okay, bin gespannt.

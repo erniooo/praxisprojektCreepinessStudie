@@ -89,6 +89,61 @@
         <div class="footer-bottom"><p>© 2026 NOVA. Alle Rechte vorbehalten.</p></div>
     </footer>
 
+    <!-- Ratings Overlay -->
+    <div class="ratings-overlay" id="ratingsOverlay" style="display: none;">
+        <div class="ratings-card">
+            <h2>Kurze Bewertung</h2>
+            <p class="ratings-subtitle">Bitte bewerten Sie die folgenden Aspekte auf einer Skala von 1 (gar nicht) bis 7 (sehr stark).</p>
+
+            <div class="rating-item">
+                <label>Wie <strong>hilfreich</strong> empfinden Sie die Personalisierung?</label>
+                <div class="rating-scale" data-key="helpfulness">
+                    <span class="scale-label">gar nicht</span>
+                    <button data-val="1">1</button>
+                    <button data-val="2">2</button>
+                    <button data-val="3">3</button>
+                    <button data-val="4">4</button>
+                    <button data-val="5">5</button>
+                    <button data-val="6">6</button>
+                    <button data-val="7">7</button>
+                    <span class="scale-label">sehr hilfreich</span>
+                </div>
+            </div>
+
+            <div class="rating-item">
+                <label>Wie <strong>nachvollziehbar</strong> sind die Empfehlungen?</label>
+                <div class="rating-scale" data-key="comprehensibility">
+                    <span class="scale-label">gar nicht</span>
+                    <button data-val="1">1</button>
+                    <button data-val="2">2</button>
+                    <button data-val="3">3</button>
+                    <button data-val="4">4</button>
+                    <button data-val="5">5</button>
+                    <button data-val="6">6</button>
+                    <button data-val="7">7</button>
+                    <span class="scale-label">sehr nachvollziehbar</span>
+                </div>
+            </div>
+
+            <div class="rating-item">
+                <label>Wie <strong>unheimlich</strong> empfinden Sie die Personalisierung?</label>
+                <div class="rating-scale" data-key="creepiness">
+                    <span class="scale-label">gar nicht</span>
+                    <button data-val="1">1</button>
+                    <button data-val="2">2</button>
+                    <button data-val="3">3</button>
+                    <button data-val="4">4</button>
+                    <button data-val="5">5</button>
+                    <button data-val="6">6</button>
+                    <button data-val="7">7</button>
+                    <span class="scale-label">sehr unheimlich</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="submitRatings" disabled>Bewertung abschicken</button>
+        </div>
+    </div>
+
     <script src="js/shop.js"></script>
 </body>
 </html>

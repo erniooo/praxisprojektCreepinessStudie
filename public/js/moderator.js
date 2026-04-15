@@ -82,7 +82,35 @@ document.getElementById('releaseBtn').addEventListener('click', async () => {
 function showShopControls() {
     document.getElementById('shopControls').style.display = 'block';
     document.getElementById('releaseBtn').style.display = 'block';
+    document.getElementById('ratingsBtn').style.display = 'block';
 }
+
+// Ratings trigger
+document.getElementById('ratingsBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('ratingsBtn');
+    await fetch('/api/stage/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, stage: 'show_ratings' })
+    });
+    btn.textContent = 'Ratings angezeigt...';
+    btn.disabled = true;
+
+    // Poll for ratings result
+    const pollRatings = setInterval(async () => {
+        const res = await fetch(`/api/session/status?session=${sessionId}`);
+        const data = await res.json();
+        if (data.ratings) {
+            clearInterval(pollRatings);
+            const r = data.ratings;
+            document.getElementById('ratingsResult').style.display = 'block';
+            document.getElementById('ratingsResult').innerHTML =
+                `Hilfreichkeit: <strong>${r.helpfulness}/7</strong> | ` +
+                `Nachvollziehbarkeit: <strong>${r.comprehensibility}/7</strong> | ` +
+                `Unheimlichkeit: <strong>${r.creepiness}/7</strong>`;
+        }
+    }, 3000);
+});
 
 function renderTranscript(transcript) {
     const area = document.getElementById('transcriptArea');
