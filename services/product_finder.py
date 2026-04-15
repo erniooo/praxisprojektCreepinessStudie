@@ -22,6 +22,29 @@ MAX_SEARCH_QUERIES = {
 }
 SEARCH_TIMEOUT_SECONDS = 6
 
+
+def extract_image_url(item):
+    for key in ("imageUrl", "image", "thumbnail", "serpapi_thumbnail"):
+        value = item.get(key)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+
+    for key in ("images", "thumbnails"):
+        values = item.get(key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, str) and value.startswith(("http://", "https://")):
+                return value
+            if isinstance(value, dict):
+                for nested_key in ("url", "imageUrl", "thumbnail"):
+                    nested_value = value.get(nested_key)
+                    if isinstance(nested_value, str) and nested_value.startswith(("http://", "https://")):
+                        return nested_value
+
+    return ""
+
+
 def generate_search_queries(profile, level):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'), timeout=OPENAI_TIMEOUT_SECONDS)
     
@@ -121,7 +144,7 @@ def search_products(query):
             products.append({
                 'name': item.get('title', ''),
                 'price': item.get('price', ''),
-                'image': item.get('imageUrl', ''),
+                'image': extract_image_url(item),
                 'shop': item.get('source', ''),
                 'link': item.get('link', ''),
                 'rating': item.get('rating', None),

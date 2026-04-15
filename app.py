@@ -1,9 +1,11 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response, abort
 from flask_cors import CORS
 import json
 import os
+import requests
 import uuid
 import threading
+from urllib.parse import urlparse
 
 from services.transcriber import transcribe_audio
 from services.speaker_separator import separate_speakers
@@ -88,6 +90,35 @@ def generate_shop_pipeline(session_id, level):
 @app.route('/')
 def index():
     return send_from_directory('public', 'index.html')
+
+
+@app.route('/api/image/proxy')
+def proxy_image():
+    image_url = request.args.get('url', '').strip()
+    parsed = urlparse(image_url)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        abort(400)
+
+    try:
+        upstream = requests.get(
+            image_url,
+            headers={'User-Agent': 'Mozilla/5.0 (NOVA research prototype)'},
+            timeout=8
+        )
+        upstream.raise_for_status()
+    except requests.RequestException:
+        abort(404)
+
+    content_type = upstream.headers.get('Content-Type', 'image/jpeg')
+    if not content_type.startswith('image/'):
+        abort(415)
+    if len(upstream.content) > 5_000_000:
+        abort(413)
+
+    response = Response(upstream.content, content_type=content_type)
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
+
 
 @app.route('/<path:path>')
 def serve_static(path):

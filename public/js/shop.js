@@ -20,8 +20,9 @@ const GENERIC_PRODUCTS = [
 
 function renderProductCard(product, stage) {
     const hasImage = product.image && product.image.startsWith('http');
+    const imageSrc = hasImage ? `/api/image/proxy?url=${encodeURIComponent(product.image)}` : '';
     const imageHtml = hasImage
-        ? `<img src="${product.image}" alt="${product.name}" onerror="this.parentElement.innerHTML='<div class=product-img-placeholder>📦</div>'">`
+        ? `<img src="${imageSrc}" alt="${product.name}" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=product-img-placeholder>📦</div>'">`
         : '<div class="product-img-placeholder">📦</div>';
     
     const badge = product.personalLabel && stage !== 'generic'
