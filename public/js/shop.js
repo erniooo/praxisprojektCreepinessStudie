@@ -179,7 +179,7 @@ async function fetchAndRender() {
             shopData = data.shopData;
             profile = data.profile;
             
-            if (currentStage === 'generic' || !shopData) {
+            if (!shopData) {
                 renderGenericShop();
             } else {
                 renderPersonalizedShop(shopData, currentStage);

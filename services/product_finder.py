@@ -1,19 +1,29 @@
 import os
 import json
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
+    OPENAI_TIMEOUT_SECONDS,
     PERSONALIZATION_MODEL,
     PERSONALIZATION_REASONING_EFFORT,
     SEARCH_QUERY_TOKEN_LIMIT,
 )
 
 SERPER_API_URL = "https://google.serper.dev/shopping"
+MAX_SEARCH_QUERIES = {
+    1: 3,
+    2: 4,
+    3: 4,
+    4: 5,
+    5: 5,
+}
+SEARCH_TIMEOUT_SECONDS = 6
 
 def generate_search_queries(profile, level):
-    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'), timeout=OPENAI_TIMEOUT_SECONDS)
     
     response = client.chat.completions.create(
         model=PERSONALIZATION_MODEL,
@@ -48,6 +58,42 @@ Antworte NUR mit einem JSON-Objekt in diesem Format:
     return [str(query).strip() for query in queries if str(query).strip()]
 
 
+def fallback_search_queries(profile, level):
+    values = []
+    for key in ("mentioned_products", "keywords", "interests", "brands"):
+        raw = profile.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        values.extend(str(item).strip() for item in raw if str(item).strip())
+
+    if not values:
+        values = ["lifestyle bestseller", "fitness tracker", "nachhaltige produkte"]
+
+    queries = []
+    city = profile.get("city")
+    for value in values:
+        query = value.lower()
+        if level >= 4 and city:
+            query = f"{query} {city}"
+        queries.append(query)
+
+    return queries
+
+
+def unique_queries(queries, level):
+    result = []
+    seen = set()
+    for query in queries:
+        cleaned = str(query).strip()
+        key = cleaned.lower()
+        if cleaned and key not in seen:
+            seen.add(key)
+            result.append(cleaned)
+
+    limit = MAX_SEARCH_QUERIES.get(level, 4)
+    return result[:limit]
+
+
 def search_products(query):
     api_key = os.environ.get('SERPER_API_KEY')
     if not api_key:
@@ -62,11 +108,11 @@ def search_products(query):
         'q': query,
         'gl': 'de',
         'hl': 'de',
-        'num': 5
+        'num': 4
     }
     
     try:
-        response = requests.post(SERPER_API_URL, json=payload, headers=headers, timeout=10)
+        response = requests.post(SERPER_API_URL, json=payload, headers=headers, timeout=SEARCH_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         
@@ -89,20 +135,40 @@ def search_products(query):
 
 
 def find_products(profile, level):
-    queries = generate_search_queries(profile, level)
+    try:
+        generated_queries = generate_search_queries(profile, level)
+    except Exception as e:
+        print(f"OpenAI query generation error: {e}")
+        generated_queries = []
+
+    queries = unique_queries(generated_queries + fallback_search_queries(profile, level), level)
     
     all_products = []
     seen_names = set()
     
-    for query in queries:
-        results = search_products(query)
-        for product in results:
-            name_key = product['name'].lower()[:50]
-            if name_key not in seen_names and product['image']:
-                seen_names.add(name_key)
-                product['search_query'] = query
-                all_products.append(product)
+    if not queries:
+        return []
+
+    max_workers = min(len(queries), 5)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(search_products, query): query for query in queries}
+        for future in as_completed(futures):
+            query = futures[future]
+            try:
+                results = future.result()
+            except Exception as e:
+                print(f"Product search failed for query '{query}': {e}")
+                results = []
+
+            for product in results:
+                if not product.get('name') or not product.get('image'):
+                    continue
+                name_key = product['name'].lower()[:50]
+                if name_key not in seen_names:
+                    seen_names.add(name_key)
+                    product['search_query'] = query
+                    all_products.append(product)
     
     # Limit based on level
-    max_products = 8 + (level * 2)  # Level 1: 10, Level 5: 18
+    max_products = 8 if level == 1 else 14
     return all_products[:max_products]

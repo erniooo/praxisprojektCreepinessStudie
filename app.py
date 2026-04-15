@@ -69,8 +69,8 @@ def generate_shop_pipeline(session_id, level):
         products = find_products(profile, level)
         sessions[session_id]['products'] = products
 
-        # Step 5: Build shop JSON
-        sessions[session_id]['progress'] = 'Personalisiere Shop...'
+        # Step 5: Build base shop and apply compact personalization
+        sessions[session_id]['progress'] = 'Personalisiere Grundshop...'
         shop_data = build_shop(profile, products, level)
         sessions[session_id]['shop_data'] = shop_data
         sessions[session_id]['level'] = level
