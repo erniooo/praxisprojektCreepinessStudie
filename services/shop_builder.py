@@ -9,7 +9,7 @@ def build_shop(profile, products, level):
     city = profile.get('city', '')
     
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "system",

@@ -6,7 +6,7 @@ def separate_speakers(raw_transcript):
     client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "system",
