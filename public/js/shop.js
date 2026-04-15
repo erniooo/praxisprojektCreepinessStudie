@@ -34,6 +34,93 @@ function getStageLabel(stage) {
     return 'Baseline';
 }
 
+function getShopLevel(data) {
+    return Number(data?.level || data?.stageMetadata?.level || 1);
+}
+
+function getSignalValue(data, key) {
+    return (data?.usedSignals || []).find(signal => signal.key === key)?.value || '';
+}
+
+function getProfileName(data) {
+    const signalName = getSignalValue(data, 'name');
+    const profileName = profile?.name && profile.name !== 'null' ? profile.name : '';
+    return String(signalName || profileName || '').replace(/^hallo,?\s+/i, '').trim();
+}
+
+function collectHeroProducts(data) {
+    const products = [];
+    (data?.sections || []).forEach(section => {
+        (section.products || []).forEach(product => {
+            if (product.image && product.image.startsWith('http') && products.length < 3) {
+                products.push(product);
+            }
+        });
+    });
+    return products;
+}
+
+function renderHeroProductStrip(data, stage) {
+    const strip = document.getElementById('heroProductStrip');
+    const banner = document.getElementById('heroBanner');
+    if (!strip || !banner) return;
+
+    const products = stage !== 'generic' ? collectHeroProducts(data) : [];
+    if (!products.length) {
+        strip.style.display = 'none';
+        strip.innerHTML = '';
+        banner.classList.remove('hero-with-products');
+        return;
+    }
+
+    strip.innerHTML = products.map((product, index) => `
+        <div class="hero-product-thumb hero-product-thumb-${index + 1}">
+            ${getImageHtml(product)}
+            <span>${escapeHtml(product.name)}</span>
+        </div>
+    `).join('');
+    strip.style.display = 'grid';
+    banner.classList.add('hero-with-products');
+}
+
+function renderHeroPersonalization(data, stage) {
+    const banner = document.getElementById('heroBanner');
+    const kicker = document.getElementById('heroPersonalKicker');
+    const contextRow = document.getElementById('heroContextRow');
+    if (!banner || !kicker || !contextRow) return;
+
+    const level = getShopLevel(data);
+    const shouldShowHyperSignals = stage !== 'generic' && level >= 4;
+    banner.classList.toggle('hero-personalized', stage !== 'generic');
+    banner.classList.toggle('hero-hyper', shouldShowHyperSignals);
+
+    if (!shouldShowHyperSignals) {
+        kicker.style.display = 'none';
+        kicker.textContent = '';
+        contextRow.style.display = 'none';
+        contextRow.innerHTML = '';
+        renderHeroProductStrip(data, stage);
+        return;
+    }
+
+    const name = getProfileName(data);
+    kicker.textContent = name ? `Hallo ${name}` : 'Hallo';
+    kicker.style.display = 'inline-flex';
+
+    const contextItems = [
+        getSignalValue(data, 'city'),
+        getSignalValue(data, 'interests'),
+        getSignalValue(data, 'price_sensitivity'),
+        level >= 5 ? data?.creepyMoment?.signal : ''
+    ].filter(Boolean).slice(0, 4);
+
+    contextRow.innerHTML = contextItems
+        .map(item => `<span class="hero-context-chip">${escapeHtml(item)}</span>`)
+        .join('');
+    contextRow.style.display = contextItems.length ? 'flex' : 'none';
+    renderHeroProductStrip(data, stage);
+}
+
 async function track(type, payload = {}) {
     try {
         await fetch('/api/interaction/track', {
@@ -76,7 +163,7 @@ function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const stimulusActions = shouldPersonalize
         ? `<div class="product-stimulus-actions">
             <button type="button" class="why-btn" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich das?</button>
-            ${shopData?.level >= 4 ? `<button type="button" class="less-btn" data-section="${sectionIndex}" data-product="${productIndex}">Weniger davon</button>` : ''}
+            ${getShopLevel(shopData) >= 4 ? `<button type="button" class="less-btn" data-section="${sectionIndex}" data-product="${productIndex}">Weniger davon</button>` : ''}
         </div>`
         : '';
 
@@ -109,7 +196,7 @@ function renderPersonalizationPanel(data, stage) {
     const signalChips = signals.length
         ? signals.map(signal => `<span class="signal-chip ${signal.sensitivity === 'high' ? 'sensitive' : ''}">${escapeHtml(signal.label)}: ${escapeHtml(signal.value)}</span>`).join('')
         : '<span class="signal-chip">Keine sichtbaren Signale</span>';
-    const creepyMoment = data.creepyMoment && data.level >= 5
+    const creepyMoment = data.creepyMoment && getShopLevel(data) >= 5
         ? `<div class="creepy-moment-banner"><strong>${escapeHtml(data.creepyMoment.headline)}</strong><p>${escapeHtml(data.creepyMoment.text)}</p></div>`
         : '';
     const transparentInfo = stage === 'transparent'
@@ -130,7 +217,7 @@ function renderPersonalizationPanel(data, stage) {
 
 function renderControlCenter(data, stage) {
     const panel = document.getElementById('controlCenterPanel');
-    if (!panel || stage === 'generic' || !data || data.level < 4) {
+    if (!panel || stage === 'generic' || !data || getShopLevel(data) < 4) {
         if (panel) panel.style.display = 'none';
         return;
     }
@@ -164,6 +251,7 @@ function renderGenericShop() {
     document.getElementById('heroHeadline').textContent = 'Fruehjahr Kollektion 2026';
     document.getElementById('heroSubtext').textContent = 'Entdecke die neuesten Trends';
     document.getElementById('heroCta').textContent = 'Jetzt shoppen';
+    renderHeroPersonalization(null, 'generic');
     document.getElementById('mainNav').innerHTML = ['Neu', 'Bestseller', 'Mode', 'Sport', 'Tech', 'Lifestyle'].map(c => `<a href="#">${c}</a>`).join('');
     renderPersonalizationPanel(null, 'generic');
     renderControlCenter(null, 'generic');
@@ -193,6 +281,7 @@ function renderPersonalizedShop(data, stage) {
     document.getElementById('heroHeadline').textContent = heroData.headline || 'Fruehjahr Kollektion 2026';
     document.getElementById('heroSubtext').textContent = heroData.subtext || 'Entdecke die neuesten Trends';
     document.getElementById('heroCta').textContent = heroData.cta || 'Jetzt shoppen';
+    renderHeroPersonalization(data, stage);
 
     const nav = data.navCategories;
     const navItems = typeof nav === 'object' && !Array.isArray(nav)

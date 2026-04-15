@@ -312,6 +312,7 @@ def _base_shop(profile, products, level):
         }
 
     return {
+        "level": level,
         "topBanner": {
             "generic": "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht",
             "personalized": personalized_banner,
