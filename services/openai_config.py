@@ -1,7 +1,19 @@
-PERSONALIZATION_MODEL = "gpt-5.4-mini"
+import os
+
+
+def _int_env(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+PERSONALIZATION_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
+TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
 JSON_RESPONSE_FORMAT = {"type": "json_object"}
 PERSONALIZATION_REASONING_EFFORT = "low"
-OPENAI_TIMEOUT_SECONDS = 30
+OPENAI_TIMEOUT_SECONDS = _int_env("OPENAI_TIMEOUT_SECONDS", 120)
+TRANSCRIPTION_TIMEOUT_SECONDS = _int_env("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", 300)
 
 SEARCH_QUERY_TOKEN_LIMIT = 800
 PROFILE_TOKEN_LIMIT = 8000

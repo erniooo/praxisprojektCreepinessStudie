@@ -10,11 +10,15 @@ import threading
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
+
 from services.transcriber import transcribe_audio
 from services.speaker_separator import separate_speakers
 from services.profile_extractor import extract_profile
 from services.product_finder import find_products
 from services.shop_builder import build_shop
+
+load_dotenv()
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)
@@ -213,6 +217,7 @@ def process_audio_pipeline(session_id, audio_path):
         print(f"Pipeline error for {session_id}: {e}")
         sessions[session_id]['status'] = 'error'
         sessions[session_id]['progress'] = f'Fehler: {str(e)}'
+        save_session(session_id)
 
 
 def generate_shop_pipeline(session_id, level):
@@ -239,6 +244,7 @@ def generate_shop_pipeline(session_id, level):
         print(f"Shop generation error for {session_id}: {e}")
         sessions[session_id]['status'] = 'error'
         sessions[session_id]['progress'] = f'Fehler: {str(e)}'
+        save_session(session_id)
 
 
 # Static file routes
@@ -343,6 +349,7 @@ def upload_transcript():
             print(f"Transcript pipeline error for {sid}: {e}")
             sessions[sid]['status'] = 'error'
             sessions[sid]['progress'] = f'Fehler: {str(e)}'
+            save_session(sid)
 
     thread = threading.Thread(target=process_transcript_pipeline, args=(session_id, raw_transcript))
     thread.daemon = True

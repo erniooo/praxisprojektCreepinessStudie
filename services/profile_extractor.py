@@ -4,13 +4,14 @@ from openai import OpenAI
 from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
+    OPENAI_TIMEOUT_SECONDS,
     PERSONALIZATION_MODEL,
     PERSONALIZATION_REASONING_EFFORT,
     PROFILE_TOKEN_LIMIT,
 )
 
 def extract_profile(speaker_turns):
-    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'), timeout=OPENAI_TIMEOUT_SECONDS)
     
     participant_text = "\n".join(
         turn['text'] for turn in speaker_turns if turn['speaker'] == 'participant'

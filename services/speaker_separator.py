@@ -3,6 +3,7 @@ from openai import OpenAI
 from services.json_utils import parse_json_response
 from services.openai_config import (
     JSON_RESPONSE_FORMAT,
+    OPENAI_TIMEOUT_SECONDS,
     PERSONALIZATION_MODEL,
     PERSONALIZATION_REASONING_EFFORT,
     SPEAKER_TOKEN_LIMIT,
@@ -10,7 +11,7 @@ from services.openai_config import (
 
 
 def separate_speakers(raw_transcript):
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=OPENAI_TIMEOUT_SECONDS)
 
     response = client.chat.completions.create(
         model=PERSONALIZATION_MODEL,
