@@ -15,16 +15,17 @@ from services.openai_config import (
 SERPER_API_URL = "https://google.serper.dev/shopping"
 SERPER_IMAGES_API_URL = "https://google.serper.dev/images"
 MAX_SEARCH_QUERIES = {
-    1: 3,
-    2: 4,
-    3: 4,
-    4: 5,
-    5: 5,
+    1: 5,
+    2: 7,
+    3: 8,
+    4: 9,
+    5: 10,
 }
 SEARCH_TIMEOUT_SECONDS = 6
 IMAGE_SEARCH_TIMEOUT_SECONDS = 5
 IMAGE_SEARCH_WORKERS = 7
 MIN_IMAGE_AREA = 280_000
+MIN_QUERY_GROUPS = 4
 
 
 def extract_image_url(item):
@@ -88,11 +89,11 @@ def generate_search_queries(profile, level):
         messages=[
             {
                 "role": "system",
-                "content": "Du generierst ein valides JSON-Objekt mit Google Shopping Suchbegriffen auf Deutsch."
+                "content": "Du generierst ein valides JSON-Objekt mit diversen Google Shopping Suchbegriffen auf Deutsch."
             },
             {
                 "role": "user",
-                "content": f"""Erstelle {4 + level} Google Shopping Suchbegriffe basierend auf diesem Profil.
+                "content": f"""Erstelle diverse Google Shopping Suchbegriffe basierend auf diesem Profil.
 
 Profil:
 {json.dumps(profile, ensure_ascii=False, indent=2)}
@@ -101,9 +102,17 @@ Personalisierungs-Level: {level}/5
 - Level 1-2: Breite Suchbegriffe (z.B. "yoga matte", "laufschuhe")
 - Level 3: Spezifischere Begriffe (z.B. "manduka yoga matte")
 - Level 4-5: Sehr spezifisch, auch beiläufig erwähnte Dinge (z.B. "vegane proteinriegel münchen")
+- Wichtig: Decke mehrere Produktkategorien ab. Wenn jemand Sport macht und Schuhe/Kleidung erwähnt, suche z.B. Schuhe, Sportkleidung, Accessoires, Recovery/Equipment, nicht nur Schuhe.
+- Nutze 4-6 unterschiedliche Kategorien. Pro Kategorie 1-3 Suchbegriffe.
+- Jede Kategorie muss einen anderen Shopping-Winkel abdecken.
 
 Antworte NUR mit einem JSON-Objekt in diesem Format:
-{{"queries": ["suchbegriff 1", "suchbegriff 2"]}}"""
+{{
+  "groups": [
+    {{"category": "kurzer Kategoriename", "queries": ["suchbegriff 1", "suchbegriff 2"]}}
+  ],
+  "queries": ["fallback flache liste"]
+}}"""
             }
         ],
         response_format=JSON_RESPONSE_FORMAT,
@@ -112,44 +121,123 @@ Antworte NUR mit einem JSON-Objekt in diesem Format:
     )
     
     data = parse_json_response(response, "Suchbegriffe")
-    queries = data.get("queries", []) if isinstance(data, dict) else data
-    return [str(query).strip() for query in queries if str(query).strip()]
+    if not isinstance(data, dict):
+        return [{"category": "Profil", "queries": [str(query).strip() for query in data if str(query).strip()]}]
+
+    groups = []
+    for group in data.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        queries = [str(query).strip() for query in group.get("queries") or [] if str(query).strip()]
+        if queries:
+            groups.append({
+                "category": str(group.get("category") or "Profil").strip()[:40],
+                "queries": queries,
+            })
+
+    if groups:
+        return groups
+
+    queries = [str(query).strip() for query in data.get("queries", []) if str(query).strip()]
+    return [{"category": "Profil", "queries": queries}] if queries else []
+
+
+def profile_items(profile, key):
+    raw = profile.get(key) or []
+    if isinstance(raw, str):
+        raw = [raw]
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
+def add_query_group(groups, category, queries):
+    cleaned = []
+    seen = set()
+    for query in queries:
+        value = str(query or "").strip().lower()
+        if value and value not in seen:
+            seen.add(value)
+            cleaned.append(value)
+    if cleaned:
+        groups.append({"category": category, "queries": cleaned})
 
 
 def fallback_search_queries(profile, level):
+    groups = []
     values = []
     for key in ("mentioned_products", "keywords", "interests", "brands"):
-        raw = profile.get(key) or []
-        if isinstance(raw, str):
-            raw = [raw]
-        values.extend(str(item).strip() for item in raw if str(item).strip())
+        values.extend(profile_items(profile, key))
 
     if not values:
         values = ["lifestyle bestseller", "fitness tracker", "nachhaltige produkte"]
 
-    queries = []
-    city = profile.get("city")
-    for value in values:
-        query = value.lower()
-        if level >= 4 and city:
-            query = f"{query} {city}"
-        queries.append(query)
+    add_query_group(groups, "Erwaehnte Produkte", profile_items(profile, "mentioned_products")[:4])
+    add_query_group(groups, "Interessen", profile_items(profile, "interests")[:4])
+    add_query_group(groups, "Marken", profile_items(profile, "brands")[:3])
+    add_query_group(groups, "Profil-Keywords", profile_items(profile, "keywords")[:5])
 
-    return queries
+    context = " ".join(values).lower()
+    if any(word in context for word in ("sport", "fitness", "laufen", "running", "yoga", "training", "gym")):
+        add_query_group(groups, "Sportschuhe", ["laufschuhe", "trainingsschuhe", "sportschuhe"])
+        add_query_group(groups, "Sportkleidung", ["sport leggings", "training shirt", "sportjacke"])
+        add_query_group(groups, "Sportzubehoer", ["sporttasche", "trinkflasche sport", "fitness tracker"])
+        add_query_group(groups, "Recovery", ["faszienrolle", "massageball sport", "yoga block"])
+
+    add_query_group(groups, "Subtile Details", profile_items(profile, "subtle_details")[:3])
+    if not groups:
+        add_query_group(groups, "Lifestyle", values[:5])
+
+    return groups
 
 
-def unique_queries(queries, level):
+def unique_query_groups(groups, level):
     result = []
     seen = set()
-    for query in queries:
-        cleaned = str(query).strip()
-        key = cleaned.lower()
-        if cleaned and key not in seen:
-            seen.add(key)
-            result.append(cleaned)
+    for group in groups:
+        if isinstance(group, str):
+            category = "Profil"
+            raw_queries = [group]
+        elif isinstance(group, dict):
+            category = str(group.get("category") or "Profil").strip()[:40] or "Profil"
+            raw_queries = group.get("queries") or []
+        else:
+            continue
 
+        cleaned_queries = []
+        for query in raw_queries:
+            cleaned = str(query).strip()
+            key = cleaned.lower()
+            if cleaned and key not in seen:
+                seen.add(key)
+                cleaned_queries.append(cleaned)
+
+        if cleaned_queries:
+            result.append({"category": category, "queries": cleaned_queries[:3]})
+
+    if len(result) < MIN_QUERY_GROUPS:
+        fallback = fallback_search_queries({}, level)
+        for group in fallback:
+            if len(result) >= MIN_QUERY_GROUPS:
+                break
+            result.append(group)
+
+    return result
+
+
+def select_queries_round_robin(groups, level):
     limit = MAX_SEARCH_QUERIES.get(level, 4)
-    return result[:limit]
+    selected = []
+    for query_index in range(3):
+        for group in groups:
+            queries = group.get("queries") or []
+            if query_index >= len(queries):
+                continue
+            selected.append({
+                "category": group.get("category") or "Profil",
+                "query": queries[query_index],
+            })
+            if len(selected) >= limit:
+                return selected
+    return selected
 
 
 def search_products(query):
@@ -166,7 +254,7 @@ def search_products(query):
         'q': query,
         'gl': 'de',
         'hl': 'de',
-        'num': 4
+        'num': 5
     }
     
     try:
@@ -256,24 +344,32 @@ def upgrade_product_images(products):
 
 def find_products(profile, level):
     try:
-        generated_queries = generate_search_queries(profile, level)
+        generated_groups = generate_search_queries(profile, level)
     except Exception as e:
         print(f"OpenAI query generation error: {e}")
-        generated_queries = []
+        generated_groups = []
 
-    queries = unique_queries(generated_queries + fallback_search_queries(profile, level), level)
-    
-    all_products = []
-    seen_names = set()
-    
-    if not queries:
+    groups = unique_query_groups(generated_groups + fallback_search_queries(profile, level), level)
+    query_specs = select_queries_round_robin(groups, level)
+
+    if not query_specs:
         return []
 
-    max_workers = min(len(queries), 5)
+    products_by_category = {}
+    category_order = []
+    for spec in query_specs:
+        category = spec["category"]
+        if category not in products_by_category:
+            products_by_category[category] = []
+            category_order.append(category)
+
+    max_workers = min(len(query_specs), 6)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(search_products, query): query for query in queries}
+        futures = {executor.submit(search_products, spec["query"]): spec for spec in query_specs}
         for future in as_completed(futures):
-            query = futures[future]
+            spec = futures[future]
+            query = spec["query"]
+            category = spec["category"]
             try:
                 results = future.result()
             except Exception as e:
@@ -283,12 +379,26 @@ def find_products(profile, level):
             for product in results:
                 if not product.get('name') or not product.get('image'):
                     continue
-                name_key = product['name'].lower()[:50]
-                if name_key not in seen_names:
-                    seen_names.add(name_key)
-                    product['search_query'] = query
-                    all_products.append(product)
-    
-    # Limit based on level
-    max_products = 8 if level == 1 else 14
+                product['search_query'] = query
+                product['query_category'] = category
+                products_by_category[category].append(product)
+
+    all_products = []
+    seen_names = set()
+    max_products = 10 if level == 1 else 18
+    max_category_size = max((len(products) for products in products_by_category.values()), default=0)
+    for product_index in range(max_category_size):
+        for category in category_order:
+            products = products_by_category.get(category) or []
+            if product_index >= len(products):
+                continue
+            product = products[product_index]
+            name_key = product['name'].lower()[:60]
+            if name_key in seen_names:
+                continue
+            seen_names.add(name_key)
+            all_products.append(product)
+            if len(all_products) >= max_products:
+                return upgrade_product_images(all_products)
+
     return upgrade_product_images(all_products[:max_products])

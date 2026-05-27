@@ -300,6 +300,7 @@ def _normalize_products(products):
             "reviews": reviews or 100,
             "link": str(product.get("link") or "").strip(),
             "search_query": str(product.get("search_query") or "").strip(),
+            "query_category": str(product.get("query_category") or product.get("search_query") or "Empfehlungen").strip(),
         })
 
     return normalized
@@ -368,32 +369,83 @@ def _build_product(product, profile, level, copy_index):
 
 def _split_products(products, profile, level):
     if level <= 1:
-        return {
-            "recommendations": [
-                _build_product(product, profile, level, index)
-                for index, product in enumerate(products[:8])
-            ],
-            "personal_picks": [],
-            "local": [],
-        }
+        return [
+            {
+                "id": "recommendations",
+                "category": "Unsere Empfehlungen",
+                "products": [
+                    _build_product(product, profile, level, index)
+                    for index, product in enumerate(products[:10])
+                ],
+            }
+        ]
 
-    rec_count = 6 if len(products) > 8 else min(len(products), 8)
-    selected = products[:14]
-    sections = {
-        "recommendations": selected[:rec_count],
-        "personal_picks": selected[rec_count:rec_count + 4],
-        "local": selected[rec_count + 4:rec_count + 8],
-    }
-
+    selected = products[:18]
+    buckets = []
+    bucket_by_category = {}
     copy_index = 0
-    decorated = {}
-    for section_id, section_products in sections.items():
-        decorated[section_id] = []
-        for product in section_products:
-            decorated[section_id].append(_build_product(product, profile, level, copy_index))
-            copy_index += 1
+    for product in selected:
+        category = _word_limit(product.get("query_category") or "Empfehlungen", 4).title()
+        key = category.lower()
+        if key not in bucket_by_category:
+            bucket = {
+                "id": f"category_{len(buckets) + 1}",
+                "category": category,
+                "products": [],
+            }
+            bucket_by_category[key] = bucket
+            buckets.append(bucket)
 
-    return decorated
+        bucket_by_category[key]["products"].append(_build_product(product, profile, level, copy_index))
+        copy_index += 1
+
+    if len(buckets) <= 1:
+        return [
+            {
+                "id": "recommendations",
+                "category": "Persoenliche Empfehlungen",
+                "products": [
+                    _build_product(product, profile, level, index)
+                    for index, product in enumerate(selected[:8])
+                ],
+            },
+            {
+                "id": "personal_picks",
+                "category": "Passende Ergaenzungen",
+                "products": [
+                    _build_product(product, profile, level, index + 8)
+                    for index, product in enumerate(selected[8:14])
+                ],
+            },
+        ]
+
+    return [bucket for bucket in buckets if bucket["products"]][:5]
+
+
+def _section_payload(section, profile, name, city, index):
+    category = section["category"]
+    if index == 0:
+        generic_title = "Unsere Empfehlungen"
+        generic_subtitle = "Die beliebtesten Produkte dieser Woche"
+    else:
+        generic_title = category
+        generic_subtitle = "Weitere Produkte aus dem Sortiment"
+
+    personalized_title = f"{category} fuer {name}" if name and name != "Gast" else f"{category} fuer dein Profil"
+    transparent_title = f"{category}: warum angezeigt"
+    if city and index == 1:
+        personalized_title = f"{category} mit Kontext {city}"
+
+    return {
+        "id": section["id"],
+        "title": _stage_text(generic_title, personalized_title, transparent_title),
+        "subtitle": _stage_text(
+            generic_subtitle,
+            "Aus mehreren Interviewsignalen und Shopping-Suchen zusammengestellt.",
+            "Diese Kategorie zeigt, welche Profilrichtung in die Auswahl eingeflossen ist.",
+        ),
+        "products": section["products"],
+    }
 
 
 def _base_shop(profile, products, level):
@@ -403,6 +455,11 @@ def _base_shop(profile, products, level):
     signals = _collect_used_signals(profile, level)
     creepy_detail = _creepy_detail(profile)
     section_products = _split_products(products, profile, level)
+    sections = [
+        _section_payload(section, profile, name, city, index)
+        for index, section in enumerate(section_products)
+        if section.get("products")
+    ]
 
     personalized_banner = "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht"
     if level >= 2 and city:
@@ -453,38 +510,7 @@ def _base_shop(profile, products, level):
             "personalized": _personalized_nav(profile),
             "transparent": ["Warum angezeigt", "Signale", "Auswahl", "Kontrolle", "Produkte"],
         },
-        "sections": [
-            {
-                "id": "recommendations",
-                "title": _stage_text("Unsere Empfehlungen", f"{name}, fuer dich ausgewaehlt", "Empfohlen anhand sichtbarer Signale"),
-                "subtitle": _stage_text(
-                    "Die beliebtesten Produkte dieser Woche",
-                    "Aus echten Shopping-Ergebnissen zusammengestellt",
-                    "Jede Empfehlung enthaelt eine kurze Begruendung.",
-                ),
-                "products": section_products["recommendations"],
-            },
-            {
-                "id": "personal_picks",
-                "title": _stage_text(None, f"{name}, das koennte dir gefallen", "Persoenliche Treffer mit Kontext"),
-                "subtitle": _stage_text(
-                    None,
-                    "Basierend auf Interessen und Details aus dem Interview",
-                    "Hier wird sichtbar, welche Interviewdetails in die Auswahl eingeflossen sind.",
-                ),
-                "products": section_products["personal_picks"],
-            },
-            {
-                "id": "local",
-                "title": _stage_text("Beliebt diese Woche", f"Beliebt in {city}" if city else "Beliebt bei aehnlichen Kunden", "Kontextbasierte Auswahl"),
-                "subtitle": _stage_text(
-                    "Was andere Kunden kaufen",
-                    "Was zu deinem Kontext passen koennte",
-                    "Diese Produkte nutzen grobe Profil- und Kontextsignale.",
-                ),
-                "products": section_products["local"],
-            },
-        ],
+        "sections": sections,
         "trustBadges": [
             {
                 "icon": "truck",
@@ -521,10 +547,13 @@ def _used_product_context(shop):
         for product in section["products"]:
             context.append({
                 "index": product["_copy_index"],
+                "section_id": section["id"],
+                "section_title": section["title"].get("personalized") if isinstance(section.get("title"), dict) else section.get("title"),
                 "name": product["name"],
                 "price": product["price"],
                 "shop": product["shop"],
                 "search_query": product.get("search_query", ""),
+                "query_category": product.get("query_category", ""),
             })
     return context
 
@@ -586,16 +615,7 @@ Antworte NUR als JSON-Objekt in diesem Format:
   }},
   "navCategories": {{"generic": ["max", "6"], "personalized": ["max", "6"], "transparent": ["max", "6"]}},
   "sections": {{
-    "recommendations": {{
-      "generic": {{"title": "kurz", "subtitle": "kurz"}},
-      "personalized": {{"title": "kurz", "subtitle": "kurz"}},
-      "transparent": {{"title": "kurz", "subtitle": "kurz"}}
-    }},
-    "personal_picks": {{
-      "personalized": {{"title": "kurz", "subtitle": "kurz"}},
-      "transparent": {{"title": "kurz", "subtitle": "kurz"}}
-    }},
-    "local": {{
+    "section_id_aus_der_produktliste": {{
       "generic": {{"title": "kurz", "subtitle": "kurz"}},
       "personalized": {{"title": "kurz", "subtitle": "kurz"}},
       "transparent": {{"title": "kurz", "subtitle": "kurz"}}
@@ -614,6 +634,8 @@ Regeln:
 - Bei Level 5 darf die Personalisierung bewusst sehr spezifisch wirken.
 - Bei Level 5 darf nur Produktindex 0 einen beilaeufigen oder invasiven Moment aufgreifen.
 - productCopy darf nur Indizes aus der Produktliste enthalten.
+- sections darf nur section_id-Werte aus der Produktliste verwenden.
+- Erhalte die Kategorievielfalt. Wenn mehrere Kategorien vorhanden sind, formuliere jede Section passend zu ihrer Kategorie.
 - Wiederhole keine Produktdaten wie name, image, price oder shop.
 - Keine Buttons oder Interaktionslogik entwerfen; die Ausgabe beschreibt nur sichtbares Design und kurze Texte."""
             },
