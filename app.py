@@ -101,6 +101,48 @@ def get_session(session_id):
         return None
 
 
+def clean_participant_name(name):
+    cleaned = ' '.join(str(name or '').strip().split())
+    return cleaned[:60]
+
+
+def apply_participant_name(session, name):
+    profile = session.get('profile')
+    if not isinstance(profile, dict):
+        profile = {}
+        session['profile'] = profile
+    old_name = profile.get('name')
+    profile['name'] = name or None
+
+    shop = session.get('shop_data')
+    if not shop:
+        return
+
+    greeting = shop.setdefault('greeting', {})
+    greeting['personalized'] = f'Hallo, {name}' if name else 'Hallo'
+    greeting['transparent'] = f'Hallo, {name}' if name else 'Hallo'
+
+    level = int(shop.get('level') or session.get('level') or 1)
+    signals = [signal for signal in (shop.get('usedSignals') or []) if signal.get('key') != 'name']
+    if name and level >= 2:
+        signals.insert(0, {
+            'key': 'name',
+            'label': 'Name',
+            'value': name,
+            'sensitivity': 'normal',
+        })
+    shop['usedSignals'] = signals
+
+    for section in shop.get('sections') or []:
+        title = section.get('title')
+        if not isinstance(title, dict) or not name:
+            continue
+        for stage in ('personalized', 'transparent'):
+            value = title.get(stage)
+            if isinstance(value, str) and old_name and value.startswith(str(old_name)):
+                title[stage] = value.replace(str(old_name), name, 1)
+
+
 def build_export_payload(session_id, session):
     shop = session.get('shop_data') or {}
     products = []
@@ -136,6 +178,7 @@ def build_export_payload(session_id, session):
         'stageHistory': session.get('stage_history') or [],
         'moderatorNotes': session.get('moderator_notes') or {},
         'shopMetadata': {
+            'design': shop.get('design'),
             'usedSignals': shop.get('usedSignals') or [],
             'creepyMoment': shop.get('creepyMoment'),
             'stageMetadata': shop.get('stageMetadata'),
@@ -379,6 +422,25 @@ def save_ratings():
     track_event(session_id, 'rating_submit', {'stage': rating_stage, 'ratings': ratings})
     save_session(session_id)
     return jsonify({'success': True})
+
+
+@app.route('/api/profile/update', methods=['POST'])
+def update_profile():
+    data = request.json or {}
+    session_id = data.get('session_id')
+    session = get_session(session_id)
+    if not session:
+        return jsonify({'error': 'Invalid session'}), 400
+
+    name = clean_participant_name(data.get('name'))
+    apply_participant_name(session, name)
+    track_event(session_id, 'profile_name_update', {'hasName': bool(name)})
+    save_session(session_id)
+    return jsonify({
+        'success': True,
+        'profile': session.get('profile'),
+        'shopData': session.get('shop_data'),
+    })
 
 
 @app.route('/api/interaction/track', methods=['POST'])

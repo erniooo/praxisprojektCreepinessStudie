@@ -53,6 +53,8 @@ let moderatorNotes = {};
 let lastRenderedTranscript = '';
 let lastRenderedProfile = '';
 let stageNoteDirty = false;
+let participantNameDirty = false;
+let lastRenderedParticipantName = '';
 
 function el(id) {
     return document.getElementById(id);
@@ -305,6 +307,59 @@ function renderProfile(profile) {
     el('profileCard').style.display = 'block';
 }
 
+function profileName(profile) {
+    const name = profile?.name;
+    if (!name || name === 'null') return '';
+    return String(name).trim();
+}
+
+function renderParticipantNameEditor(profile) {
+    const card = el('participantNameCard');
+    const input = el('participantNameInput');
+    if (!card || !input) return;
+
+    const name = profileName(profile);
+    card.style.display = 'block';
+    if (!participantNameDirty && name !== lastRenderedParticipantName) {
+        input.value = name;
+        lastRenderedParticipantName = name;
+    }
+}
+
+async function saveParticipantName() {
+    const input = el('participantNameInput');
+    const status = el('participantNameStatus');
+    const btn = el('saveParticipantNameBtn');
+    const name = input.value.trim();
+
+    status.textContent = 'Speichere...';
+    btn.disabled = true;
+    try {
+        const response = await fetch('/api/profile/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, name })
+        });
+        if (!response.ok) throw new Error('Name konnte nicht gespeichert werden.');
+        const data = await response.json();
+        participantNameDirty = false;
+        lastRenderedParticipantName = profileName(data.profile);
+        lastRenderedProfile = '';
+        if (data.profile) {
+            renderProfile(data.profile);
+            renderParticipantNameEditor(data.profile);
+        }
+        status.textContent = 'Name gespeichert.';
+        setTimeout(() => {
+            if (status.textContent === 'Name gespeichert.') status.textContent = '';
+        }, 1800);
+    } catch (err) {
+        status.textContent = err.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function updateRatingsButton(status) {
     const btn = el('ratingsBtn');
     if (!btn || btn.style.display === 'none') return;
@@ -335,6 +390,7 @@ async function pollStatus() {
 
         if (data.profile) {
             renderProfile(data.profile);
+            renderParticipantNameEditor(data.profile);
             el('levelCard').style.display = 'block';
         }
 
@@ -390,6 +446,10 @@ updateStageTimer();
 el('stageNote').addEventListener('input', () => {
     stageNoteDirty = true;
 });
+el('participantNameInput').addEventListener('input', () => {
+    participantNameDirty = true;
+});
+el('saveParticipantNameBtn').addEventListener('click', saveParticipantName);
 setInterval(updateStageTimer, 1000);
 pollStatus();
 setInterval(pollStatus, 2000);

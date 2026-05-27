@@ -17,18 +17,18 @@
         <div class="shop-header-content">
             <div class="logo">NOVA</div>
             <nav class="main-nav" id="mainNav">
-                <a href="#">Neu</a>
-                <a href="#">Bestseller</a>
-                <a href="#">Mode</a>
-                <a href="#">Sport</a>
-                <a href="#">Tech</a>
-                <a href="#">Lifestyle</a>
+                <span>Neu</span>
+                <span>Bestseller</span>
+                <span>Mode</span>
+                <span>Sport</span>
+                <span>Tech</span>
+                <span>Lifestyle</span>
             </nav>
             <div class="header-actions">
                 <span id="greeting" class="shop-greeting"></span>
-                <button class="icon-btn">🔍</button>
-                <button class="icon-btn">👤</button>
-                <button class="icon-btn">🛒 <span class="cart-badge">0</span></button>
+                <span class="icon-btn visual-icon">Suche</span>
+                <span class="icon-btn visual-icon">Konto</span>
+                <span class="icon-btn visual-icon">Bag <span class="cart-badge">0</span></span>
             </div>
         </div>
     </header>
@@ -42,7 +42,7 @@
                 <h1 id="heroHeadline">Frühjahr Kollektion 2026</h1>
                 <p id="heroSubtext">Entdecke die neuesten Trends</p>
                 <div class="hero-context-row" id="heroContextRow" style="display: none;"></div>
-                <button class="btn-hero" id="heroCta">Jetzt shoppen</button>
+                <span class="btn-hero visual-cta" id="heroCta">Jetzt shoppen</span>
             </div>
             <div class="hero-product-strip" id="heroProductStrip" style="display: none;"></div>
         </section>
@@ -163,14 +163,6 @@
             </div>
 
             <button class="btn-primary" id="submitRatings" disabled>Bewertung abschicken</button>
-        </div>
-    </div>
-
-    <!-- Product / Explanation Modal -->
-    <div class="shop-modal-overlay" id="shopModal" style="display: none;">
-        <div class="shop-modal-card">
-            <button class="shop-modal-close" id="shopModalClose" aria-label="Schliessen">&times;</button>
-            <div id="shopModalContent"></div>
         </div>
     </div>
 

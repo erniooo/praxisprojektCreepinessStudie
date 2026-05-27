@@ -7,6 +7,7 @@ let shopData = null;
 let profile = null;
 let currentRatingStage = 'generic';
 let ratings = {};
+let lastProfileJson = '';
 
 const GENERIC_PRODUCTS = [
     { name: 'Classic T-Shirt', price: '29,99 EUR', image: '', shop: 'NOVA', rating: 4.5, reviews: 124 },
@@ -32,6 +33,76 @@ function getStageLabel(stage) {
     if (stage === 'transparent') return 'Transparent';
     if (stage === 'personalized') return 'Personalisiert';
     return 'Baseline';
+}
+
+function getStageKey(stage) {
+    if (stage === 'transparent') return 'transparent';
+    if (stage === 'personalized') return 'personalized';
+    return 'generic';
+}
+
+function stageValue(value, stage, fallback = '') {
+    const stageKey = getStageKey(stage);
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if (Object.prototype.hasOwnProperty.call(value, stageKey)) {
+            return value[stageKey] ?? fallback;
+        }
+        return value.personalized ?? value.generic ?? fallback;
+    }
+    return value ?? fallback;
+}
+
+function isHexColor(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+}
+
+function cleanChoice(value, allowed, fallback) {
+    const normalized = String(value || '').toLowerCase();
+    return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function applyShopDesign(data, stage) {
+    const design = data?.design || {};
+    const palette = design.palette || {};
+    const defaults = {
+        background: '#F5F6F3',
+        surface: '#FFFFFF',
+        text: '#101211',
+        muted: '#646A66',
+        accent: '#1F5B45',
+        accentText: '#FFFFFF',
+        softAccent: '#EAF4EE',
+        border: '#DDE2DD',
+        heroBackground: '#101211',
+        heroText: '#FFFFFF'
+    };
+
+    Object.entries(defaults).forEach(([key, fallback]) => {
+        const value = isHexColor(palette[key]) ? palette[key] : fallback;
+        document.body.style.setProperty(`--ai-${key}`, value);
+    });
+
+    const stageKey = getStageKey(stage);
+    const heroLayout = cleanChoice(design.heroLayout, ['gallery', 'editorial', 'minimal', 'split'], 'gallery');
+    const cardStyle = cleanChoice(design.cardStyle, ['editorial', 'soft', 'premium', 'catalog'], 'editorial');
+    const density = cleanChoice(design.density, ['airy', 'balanced', 'compact'], 'balanced');
+    const imageTreatment = cleanChoice(design.imageTreatment, ['clean', 'editorial', 'rounded', 'catalog'], 'clean');
+
+    document.body.classList.remove(
+        'stage-generic', 'stage-personalized', 'stage-transparent',
+        'hero-gallery', 'hero-editorial', 'hero-minimal', 'hero-split',
+        'card-editorial', 'card-soft', 'card-premium', 'card-catalog',
+        'density-airy', 'density-balanced', 'density-compact',
+        'image-clean', 'image-editorial', 'image-rounded', 'image-catalog'
+    );
+    document.body.classList.add(
+        'ai-designed',
+        `stage-${stageKey}`,
+        `hero-${heroLayout}`,
+        `card-${cardStyle}`,
+        `density-${density}`,
+        `image-${imageTreatment}`
+    );
 }
 
 function getShopLevel(data) {
@@ -121,26 +192,11 @@ function renderHeroPersonalization(data, stage) {
     renderHeroProductStrip(data, stage);
 }
 
-async function track(type, payload = {}) {
-    try {
-        await fetch('/api/interaction/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, type, payload })
-        });
-    } catch (err) {}
-}
-
 function getImageHtml(product) {
     const hasImage = product.image && product.image.startsWith('http');
     if (!hasImage) return '<div class="product-img-placeholder">Box</div>';
     const imageSrc = `/api/image/proxy?url=${encodeURIComponent(product.image)}`;
     return `<img src="${imageSrc}" alt="${escapeHtml(product.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=product-img-placeholder>Box</div>'">`;
-}
-
-function getProductByIndex(sectionIndex, productIndex) {
-    const section = shopData?.sections?.[sectionIndex];
-    return section?.products?.[productIndex] || null;
 }
 
 function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
@@ -160,18 +216,10 @@ function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const rating = product.rating
         ? `<div class="product-rating">${'★'.repeat(ratingValue)}${'☆'.repeat(5 - ratingValue)} <span>(${escapeHtml(product.reviews || '')})</span></div>`
         : '';
-    const stimulusActions = shouldPersonalize
-        ? `<div class="product-stimulus-actions">
-            <button type="button" class="why-btn" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich das?</button>
-            ${getShopLevel(shopData) >= 4 ? `<button type="button" class="less-btn" data-section="${sectionIndex}" data-product="${productIndex}">Weniger davon</button>` : ''}
-        </div>`
-        : '';
 
     return `
         <div class="product-card-new ${product.isCreepyMoment && shouldPersonalize ? 'creepy-product-card' : ''}">
-            <button type="button" class="product-detail-trigger" data-section="${sectionIndex}" data-product="${productIndex}" aria-label="Produktdetails anzeigen">
-                <div class="product-image-new">${badge}${imageHtml}</div>
-            </button>
+            <div class="product-image-new">${badge}${imageHtml}</div>
             <div class="product-info-new">
                 ${personalMsg}
                 <h3 class="product-name">${escapeHtml(product.name)}</h3>
@@ -179,7 +227,6 @@ function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
                 ${rating}
                 ${transparency}
                 <div class="product-price-new"><span class="price-current">${escapeHtml(product.price)}</span></div>
-                ${stimulusActions}
             </div>
         </div>
     `;
@@ -202,13 +249,17 @@ function renderPersonalizationPanel(data, stage) {
     const transparentInfo = stage === 'transparent'
         ? `<div class="data-basis-box"><strong>${escapeHtml(data.explanationDetails?.transparentIntro || 'Genutzte Signale')}</strong><div class="signal-chip-row">${signalChips}</div></div>`
         : `<div class="signal-chip-row">${signalChips}</div>`;
+    const variant = data.design?.stageVariants?.[getStageKey(stage)] || {};
+    const panelTitle = variant.panelTitle || 'Personalisierungsprofil';
+    const panelSummary = variant.panelSummary || data.explanationDetails?.summary || 'Der Shop wurde anhand deines Interviewprofils angepasst.';
+    const moodLabel = variant.moodLabel || getStageLabel(stage);
 
     panel.innerHTML = `
         <div class="personalization-panel-header">
-            <span>${escapeHtml(getStageLabel(stage))}</span>
-            <strong>Personalisierungsprofil</strong>
+            <span>${escapeHtml(moodLabel)}</span>
+            <strong>${escapeHtml(panelTitle)}</strong>
         </div>
-        <p>${escapeHtml(data.explanationDetails?.summary || 'Der Shop wurde anhand deines Interviewprofils angepasst.')}</p>
+        <p>${escapeHtml(panelSummary)}</p>
         ${transparentInfo}
         ${creepyMoment}
     `;
@@ -224,14 +275,14 @@ function renderControlCenter(data, stage) {
 
     const options = data.controlOptions || [];
     const optionHtml = options.map(option => `
-        <label class="control-toggle">
-            <input type="checkbox" ${option.enabled ? 'checked' : ''} data-control-id="${escapeHtml(option.id)}">
+        <div class="control-toggle ${option.enabled ? 'is-on' : 'is-off'}">
+            <span class="visual-switch"><span></span></span>
             <span><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></span>
-        </label>
+        </div>
     `).join('');
     const sensitiveSignals = (data.usedSignals || []).filter(signal => signal.sensitivity === 'high');
     const sensitiveButtons = stage === 'transparent' && sensitiveSignals.length
-        ? `<div class="sensitive-controls">${sensitiveSignals.map(signal => `<button type="button" class="reject-signal-btn" data-signal="${escapeHtml(signal.key)}">Diese Info nicht verwenden: ${escapeHtml(signal.label)}</button>`).join('')}</div>`
+        ? `<div class="sensitive-controls">${sensitiveSignals.map(signal => `<span class="signal-visibility-pill">Sichtbar: ${escapeHtml(signal.label)}</span>`).join('')}</div>`
         : '';
 
     panel.innerHTML = `
@@ -246,13 +297,14 @@ function renderControlCenter(data, stage) {
 }
 
 function renderGenericShop() {
+    applyShopDesign(null, 'generic');
     document.getElementById('topBar').textContent = 'Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht';
     document.getElementById('greeting').textContent = '';
     document.getElementById('heroHeadline').textContent = 'Fruehjahr Kollektion 2026';
     document.getElementById('heroSubtext').textContent = 'Entdecke die neuesten Trends';
     document.getElementById('heroCta').textContent = 'Jetzt shoppen';
     renderHeroPersonalization(null, 'generic');
-    document.getElementById('mainNav').innerHTML = ['Neu', 'Bestseller', 'Mode', 'Sport', 'Tech', 'Lifestyle'].map(c => `<a href="#">${c}</a>`).join('');
+    document.getElementById('mainNav').innerHTML = ['Neu', 'Bestseller', 'Mode', 'Sport', 'Tech', 'Lifestyle'].map(c => `<span>${c}</span>`).join('');
     renderPersonalizationPanel(null, 'generic');
     renderControlCenter(null, 'generic');
     document.getElementById('shopSections').innerHTML = `
@@ -260,7 +312,7 @@ function renderGenericShop() {
             <div class="section-header">
                 <div><h2 class="section-title-new">Unsere Empfehlungen</h2>
                 <p class="section-subtitle-new">Die beliebtesten Produkte dieser Woche</p></div>
-                <a href="#" class="view-all">Alle ansehen</a>
+                <span class="view-all">Kollektion</span>
             </div>
             <div class="products-grid-new">
                 ${GENERIC_PRODUCTS.map((p, index) => renderProductCard(p, 'generic', 0, index)).join('')}
@@ -271,11 +323,10 @@ function renderGenericShop() {
 }
 
 function renderPersonalizedShop(data, stage) {
-    const stageKey = stage === 'generic' ? 'generic' : 'personalized';
-    const banner = data.topBanner;
-    document.getElementById('topBar').textContent = typeof banner === 'object' ? (banner[stageKey] || banner.generic) : banner;
-    const greet = data.greeting;
-    document.getElementById('greeting').textContent = stage !== 'generic' ? (typeof greet === 'object' ? (greet.personalized || '') : greet) : '';
+    const stageKey = getStageKey(stage);
+    applyShopDesign(data, stage);
+    document.getElementById('topBar').textContent = stageValue(data.topBanner, stage, 'Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht');
+    document.getElementById('greeting').textContent = stage !== 'generic' ? stageValue(data.greeting, stage, '') : '';
     const hero = data.hero;
     const heroData = typeof hero === 'object' && hero[stageKey] ? hero[stageKey] : hero.generic || hero;
     document.getElementById('heroHeadline').textContent = heroData.headline || 'Fruehjahr Kollektion 2026';
@@ -287,7 +338,7 @@ function renderPersonalizedShop(data, stage) {
     const navItems = typeof nav === 'object' && !Array.isArray(nav)
         ? (nav[stageKey] || nav.generic || ['Neu', 'Bestseller', 'Mode'])
         : (nav || ['Neu', 'Bestseller', 'Mode']);
-    document.getElementById('mainNav').innerHTML = navItems.map(c => `<a href="#">${escapeHtml(c)}</a>`).join('');
+    document.getElementById('mainNav').innerHTML = navItems.map(c => `<span>${escapeHtml(c)}</span>`).join('');
     renderPersonalizationPanel(data, stage);
     renderControlCenter(data, stage);
 
@@ -295,15 +346,15 @@ function renderPersonalizedShop(data, stage) {
     let sectionsHtml = '';
     sections.forEach((section, sectionIndex) => {
         if (!section.products || section.products.length === 0) return;
-        const title = typeof section.title === 'object' ? (section.title[stageKey] || section.title.generic) : section.title;
-        const subtitle = typeof section.subtitle === 'object' ? (section.subtitle[stageKey] || section.subtitle.generic) : section.subtitle;
+        const title = stageValue(section.title, stage, '');
+        const subtitle = stageValue(section.subtitle, stage, '');
         if (!title) return;
         sectionsHtml += `
             <section class="recommendations-section">
                 <div class="section-header">
                     <div><h2 class="section-title-new">${escapeHtml(title)}</h2>
                     ${subtitle ? `<p class="section-subtitle-new">${escapeHtml(subtitle)}</p>` : ''}</div>
-                    <a href="#" class="view-all">Alle ansehen</a>
+                    <span class="view-all">${escapeHtml(data.design?.stageVariants?.[stageKey]?.moodLabel || 'Auswahl')}</span>
                 </div>
                 <div class="products-grid-new">
                     ${section.products.map((p, productIndex) => renderProductCard(p, stage, sectionIndex, productIndex)).join('')}
@@ -331,96 +382,11 @@ function renderGenericTrustBadges() {
 function renderCustomTrustBadges(badges, stageKey) {
     const icons = { truck: 'OK', return: '↺', lock: 'SSL' };
     document.getElementById('trustBadges').innerHTML = badges.map(b => {
-        const title = typeof b.title === 'object' ? (b.title[stageKey] || b.title.generic) : b.title;
-        const text = typeof b.text === 'object' ? (b.text[stageKey] || b.text.generic) : b.text;
+        const title = stageValue(b.title, stageKey, '');
+        const text = stageValue(b.text, stageKey, '');
         return `<div class="trust-badge"><span class="trust-icon">${escapeHtml(icons[b.icon] || 'OK')}</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div></div>`;
     }).join('');
 }
-
-function openModal(html) {
-    document.getElementById('shopModalContent').innerHTML = html;
-    document.getElementById('shopModal').style.display = 'flex';
-}
-
-function closeModal() {
-    document.getElementById('shopModal').style.display = 'none';
-}
-
-function showWhyModal(product, sectionIndex, productIndex) {
-    track('why_click', { sectionIndex, productIndex, productName: product.name });
-    const signals = (shopData?.usedSignals || []).map(signal => `<li>${escapeHtml(signal.label)}: ${escapeHtml(signal.value)}</li>`).join('');
-    openModal(`
-        <h2>Warum sehe ich das?</h2>
-        <p>${escapeHtml(product.whyDetails || product.transparencyReason || 'Diese Empfehlung basiert auf deinem Interviewprofil und den abgeleiteten Suchbegriffen.')}</p>
-        <div class="modal-signal-box">
-            <strong>Genutzte Signale</strong>
-            <ul>${signals || '<li>Allgemeine Shop-Signale</li>'}</ul>
-        </div>
-    `);
-}
-
-function showProductModal(product, sectionIndex, productIndex) {
-    track('product_detail_open', { sectionIndex, productIndex, productName: product.name });
-    openModal(`
-        <div class="modal-product-layout">
-            <div class="modal-product-image">${getImageHtml(product)}</div>
-            <div>
-                <p class="product-brand">${escapeHtml(product.shop || 'NOVA')}</p>
-                <h2>${escapeHtml(product.name)}</h2>
-                <p class="modal-price">${escapeHtml(product.price)}</p>
-                <p>${escapeHtml(product.whyDetails || 'Dieses Produkt stammt aus echten Shopping-Ergebnissen und wurde in den Grundshop aufgenommen.')}</p>
-                ${currentStage !== 'generic' ? `<button type="button" class="modal-secondary-btn" data-modal-action="why" data-section="${sectionIndex}" data-product="${productIndex}">Warum dieses Produkt?</button>` : ''}
-            </div>
-        </div>
-    `);
-}
-
-document.addEventListener('click', (event) => {
-    const whyButton = event.target.closest('.why-btn');
-    if (whyButton) {
-        const product = getProductByIndex(Number(whyButton.dataset.section), Number(whyButton.dataset.product));
-        if (product) showWhyModal(product, Number(whyButton.dataset.section), Number(whyButton.dataset.product));
-        return;
-    }
-    const lessButton = event.target.closest('.less-btn');
-    if (lessButton) {
-        const product = getProductByIndex(Number(lessButton.dataset.section), Number(lessButton.dataset.product));
-        track('less_like_this_click', { productName: product?.name || '', sectionIndex: lessButton.dataset.section, productIndex: lessButton.dataset.product });
-        lessButton.textContent = 'Vermerkt';
-        lessButton.disabled = true;
-        return;
-    }
-    const detailButton = event.target.closest('.product-detail-trigger');
-    if (detailButton) {
-        const sectionIndex = Number(detailButton.dataset.section);
-        const productIndex = Number(detailButton.dataset.product);
-        const product = getProductByIndex(sectionIndex, productIndex);
-        if (product) showProductModal(product, sectionIndex, productIndex);
-        return;
-    }
-    const rejectSignalButton = event.target.closest('.reject-signal-btn');
-    if (rejectSignalButton) {
-        track('reject_signal_click', { signal: rejectSignalButton.dataset.signal });
-        rejectSignalButton.textContent = 'Info ausgeschlossen';
-        rejectSignalButton.disabled = true;
-        return;
-    }
-    const controlInput = event.target.closest('.control-toggle input');
-    if (controlInput) {
-        track('control_toggle', { id: controlInput.dataset.controlId, enabled: controlInput.checked });
-        return;
-    }
-    const modalWhy = event.target.closest('[data-modal-action="why"]');
-    if (modalWhy) {
-        const product = getProductByIndex(Number(modalWhy.dataset.section), Number(modalWhy.dataset.product));
-        if (product) showWhyModal(product, Number(modalWhy.dataset.section), Number(modalWhy.dataset.product));
-    }
-});
-
-document.getElementById('shopModalClose').addEventListener('click', closeModal);
-document.getElementById('shopModal').addEventListener('click', (event) => {
-    if (event.target.id === 'shopModal') closeModal();
-});
 
 async function fetchAndRender() {
     try {
@@ -429,10 +395,13 @@ async function fetchAndRender() {
         const stageChanged = data.stage !== currentStage;
         const shopBecameAvailable = !shopData && data.shopData;
         const shopWasRegenerated = shopData && data.shopData && data.shopData.generatedAt && data.shopData.generatedAt !== shopData.generatedAt;
-        if (stageChanged || shopBecameAvailable || shopWasRegenerated) {
+        const profileJson = JSON.stringify(data.profile || {});
+        const profileChanged = profileJson !== lastProfileJson;
+        if (stageChanged || shopBecameAvailable || shopWasRegenerated || profileChanged) {
             currentStage = data.stage;
             shopData = data.shopData;
             profile = data.profile;
+            lastProfileJson = profileJson;
             if (!shopData) renderGenericShop();
             else renderPersonalizedShop(shopData, currentStage);
         }

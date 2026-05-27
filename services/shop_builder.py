@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from openai import OpenAI
 from services.json_utils import parse_json_response
 from services.openai_config import (
@@ -9,6 +10,48 @@ from services.openai_config import (
     PERSONALIZATION_REASONING_EFFORT,
     SHOP_TOKEN_LIMIT,
 )
+
+
+STAGE_KEYS = ("generic", "personalized", "transparent")
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+DEFAULT_DESIGN = {
+    "themeName": "Editorial Lifestyle",
+    "heroLayout": "gallery",
+    "cardStyle": "editorial",
+    "density": "balanced",
+    "imageTreatment": "clean",
+    "palette": {
+        "background": "#F5F6F3",
+        "surface": "#FFFFFF",
+        "text": "#101211",
+        "muted": "#646A66",
+        "accent": "#1F5B45",
+        "accentText": "#FFFFFF",
+        "softAccent": "#EAF4EE",
+        "border": "#DDE2DD",
+        "heroBackground": "#101211",
+        "heroText": "#FFFFFF",
+    },
+    "stageVariants": {
+        "generic": {
+            "moodLabel": "Baseline",
+            "panelTitle": "Neutraler Shop",
+            "panelSummary": "Eine allgemein gehaltene Storefront ohne sichtbare Interviewdetails.",
+        },
+        "personalized": {
+            "moodLabel": "Personalisiert",
+            "panelTitle": "Fuer dich kuratiert",
+            "panelSummary": "Produkte und Texte greifen Signale aus dem Interviewprofil auf.",
+        },
+        "transparent": {
+            "moodLabel": "Transparent",
+            "panelTitle": "Warum diese Auswahl?",
+            "panelSummary": "Die verwendeten Signale werden sichtbar gemacht und eingeordnet.",
+        },
+    },
+}
 
 
 def _profile_value(profile, key, fallback=""):
@@ -36,6 +79,74 @@ def _first_profile_item(profile, keys):
 def _word_limit(text, max_words):
     words = str(text or "").strip().split()
     return " ".join(words[:max_words])
+
+
+def _copy_default_design():
+    return json.loads(json.dumps(DEFAULT_DESIGN))
+
+
+def _stage_text(generic="", personalized="", transparent=None):
+    return {
+        "generic": generic,
+        "personalized": personalized,
+        "transparent": personalized if transparent is None else transparent,
+    }
+
+
+def _clean_choice(value, allowed, fallback):
+    value = str(value or "").strip().lower()
+    return value if value in allowed else fallback
+
+
+def _clean_hex(value, fallback):
+    value = str(value or "").strip()
+    return value if HEX_COLOR_RE.match(value) else fallback
+
+
+def _normalize_design(raw_design):
+    if not isinstance(raw_design, dict):
+        return None
+
+    design = _copy_default_design()
+    design["themeName"] = _word_limit(raw_design.get("themeName") or design["themeName"], 4)
+    design["heroLayout"] = _clean_choice(
+        raw_design.get("heroLayout"),
+        {"gallery", "editorial", "minimal", "split"},
+        design["heroLayout"],
+    )
+    design["cardStyle"] = _clean_choice(
+        raw_design.get("cardStyle"),
+        {"editorial", "soft", "premium", "catalog"},
+        design["cardStyle"],
+    )
+    design["density"] = _clean_choice(
+        raw_design.get("density"),
+        {"airy", "balanced", "compact"},
+        design["density"],
+    )
+    design["imageTreatment"] = _clean_choice(
+        raw_design.get("imageTreatment"),
+        {"clean", "editorial", "rounded", "catalog"},
+        design["imageTreatment"],
+    )
+
+    raw_palette = raw_design.get("palette")
+    if isinstance(raw_palette, dict):
+        for key, fallback in design["palette"].items():
+            design["palette"][key] = _clean_hex(raw_palette.get(key), fallback)
+
+    raw_variants = raw_design.get("stageVariants")
+    if isinstance(raw_variants, dict):
+        for stage in STAGE_KEYS:
+            raw_variant = raw_variants.get(stage)
+            if not isinstance(raw_variant, dict):
+                continue
+            target = design["stageVariants"][stage]
+            target["moodLabel"] = _word_limit(raw_variant.get("moodLabel") or target["moodLabel"], 4)
+            target["panelTitle"] = _word_limit(raw_variant.get("panelTitle") or target["panelTitle"], 8)
+            target["panelSummary"] = _word_limit(raw_variant.get("panelSummary") or target["panelSummary"], 18)
+
+    return design
 
 
 SIGNAL_LABELS = {
@@ -313,14 +424,13 @@ def _base_shop(profile, products, level):
 
     return {
         "level": level,
-        "topBanner": {
-            "generic": "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht",
-            "personalized": personalized_banner,
-        },
-        "greeting": {
-            "generic": "",
-            "personalized": f"Hallo, {name}" if name else "Hallo",
-        },
+        "design": _copy_default_design(),
+        "topBanner": _stage_text(
+            "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht",
+            personalized_banner,
+            f"Transparente Empfehlungen | Genutzte Signale sichtbar | Versand nach {city}" if city else "Transparente Empfehlungen | Genutzte Signale sichtbar",
+        ),
+        "greeting": _stage_text("", f"Hallo, {name}" if name else "Hallo"),
         "hero": {
             "generic": {
                 "headline": "Fruehjahr Kollektion 2026",
@@ -332,70 +442,64 @@ def _base_shop(profile, products, level):
                 "subtext": "Produkte, die zu deinem Interviewprofil passen.",
                 "cta": "Empfehlungen ansehen",
             },
+            "transparent": {
+                "headline": "So wurde dein Shop personalisiert",
+                "subtext": "Empfehlungen mit sichtbarer Datengrundlage aus dem Interview.",
+                "cta": "Signale ansehen",
+            },
         },
         "navCategories": {
             "generic": ["Neu", "Bestseller", "Mode", "Sport", "Tech", "Lifestyle"],
             "personalized": _personalized_nav(profile),
+            "transparent": ["Warum angezeigt", "Signale", "Auswahl", "Kontrolle", "Produkte"],
         },
         "sections": [
             {
                 "id": "recommendations",
-                "title": {
-                    "generic": "Unsere Empfehlungen",
-                    "personalized": f"{name}, fuer dich ausgewaehlt",
-                },
-                "subtitle": {
-                    "generic": "Die beliebtesten Produkte dieser Woche",
-                    "personalized": "Aus echten Shopping-Ergebnissen zusammengestellt",
-                },
+                "title": _stage_text("Unsere Empfehlungen", f"{name}, fuer dich ausgewaehlt", "Empfohlen anhand sichtbarer Signale"),
+                "subtitle": _stage_text(
+                    "Die beliebtesten Produkte dieser Woche",
+                    "Aus echten Shopping-Ergebnissen zusammengestellt",
+                    "Jede Empfehlung enthaelt eine kurze Begruendung.",
+                ),
                 "products": section_products["recommendations"],
             },
             {
                 "id": "personal_picks",
-                "title": {
-                    "generic": None,
-                    "personalized": f"{name}, das koennte dir gefallen",
-                },
-                "subtitle": {
-                    "generic": None,
-                    "personalized": "Basierend auf Interessen und Details aus dem Interview",
-                },
+                "title": _stage_text(None, f"{name}, das koennte dir gefallen", "Persoenliche Treffer mit Kontext"),
+                "subtitle": _stage_text(
+                    None,
+                    "Basierend auf Interessen und Details aus dem Interview",
+                    "Hier wird sichtbar, welche Interviewdetails in die Auswahl eingeflossen sind.",
+                ),
                 "products": section_products["personal_picks"],
             },
             {
                 "id": "local",
-                "title": {
-                    "generic": "Beliebt diese Woche",
-                    "personalized": f"Beliebt in {city}" if city else "Beliebt bei aehnlichen Kunden",
-                },
-                "subtitle": {
-                    "generic": "Was andere Kunden kaufen",
-                    "personalized": "Was zu deinem Kontext passen koennte",
-                },
+                "title": _stage_text("Beliebt diese Woche", f"Beliebt in {city}" if city else "Beliebt bei aehnlichen Kunden", "Kontextbasierte Auswahl"),
+                "subtitle": _stage_text(
+                    "Was andere Kunden kaufen",
+                    "Was zu deinem Kontext passen koennte",
+                    "Diese Produkte nutzen grobe Profil- und Kontextsignale.",
+                ),
                 "products": section_products["local"],
             },
         ],
         "trustBadges": [
             {
                 "icon": "truck",
-                "title": {
-                    "generic": "Schneller Versand",
-                    "personalized": f"Schneller Versand nach {city}" if city else "Schneller Versand",
-                },
-                "text": {
-                    "generic": "1-3 Werktage",
-                    "personalized": "1-3 Werktage",
-                },
+                "title": _stage_text("Schneller Versand", f"Schneller Versand nach {city}" if city else "Schneller Versand"),
+                "text": _stage_text("1-3 Werktage", "1-3 Werktage"),
             },
             {
                 "icon": "return",
-                "title": {"generic": "Einfache Rueckgabe", "personalized": "Einfache Rueckgabe"},
-                "text": {"generic": "30 Tage kostenlos", "personalized": "30 Tage kostenlos"},
+                "title": _stage_text("Einfache Rueckgabe", "Einfache Rueckgabe"),
+                "text": _stage_text("30 Tage kostenlos", "30 Tage kostenlos"),
             },
             {
                 "icon": "lock",
-                "title": {"generic": "Sicherer Kauf", "personalized": "Sicherer Kauf"},
-                "text": {"generic": "SSL verschluesselt", "personalized": "SSL verschluesselt"},
+                "title": _stage_text("Sicherer Kauf", "Sicherer Kauf"),
+                "text": _stage_text("SSL verschluesselt", "SSL verschluesselt"),
             },
         ],
         "usedSignals": signals,
@@ -432,8 +536,10 @@ def _request_personalization(profile, product_context, level):
         messages=[
             {
                 "role": "system",
-                "content": """Du personalisierst einen bestehenden Online-Shop. Erzeuge nur kurze Texte und kurze Produktlabels.
-Gib niemals vollstaendige Produktobjekte zurueck. Verwende nur die angegebenen Produkt-Indexnummern."""
+                "content": """Du bist Creative Director und Research-Stimulus-Designer fuer einen fiktiven Online-Shop.
+Entwirf in einem One-Shot eine visuelle Richtung und kurze Shop-Texte fuer drei Stages: generic, personalized, transparent.
+Gib nur ein valides JSON-Objekt zurueck. Kein HTML, kein CSS, kein JavaScript, keine Markdown-Formatierung.
+Die Implementierung rendert feste Komponenten; du entscheidest nur ueber Design-Tokens, Layout-Variante und kurze Texte."""
             },
             {
                 "role": "user",
@@ -447,14 +553,53 @@ Produkte im Grundshop:
 
 Antworte NUR als JSON-Objekt in diesem Format:
 {{
-  "topBanner": "kurzer personalisierter Banner",
-  "greeting": "Hallo, Name",
-  "hero": {{"headline": "kurz", "subtext": "kurz", "cta": "kurz"}},
-  "navCategories": ["max", "6", "kurze", "kategorien"],
+  "design": {{
+    "themeName": "max 4 Woerter",
+    "heroLayout": "gallery | editorial | minimal | split",
+    "cardStyle": "editorial | soft | premium | catalog",
+    "density": "airy | balanced | compact",
+    "imageTreatment": "clean | editorial | rounded | catalog",
+    "palette": {{
+      "background": "#RRGGBB",
+      "surface": "#RRGGBB",
+      "text": "#RRGGBB",
+      "muted": "#RRGGBB",
+      "accent": "#RRGGBB",
+      "accentText": "#RRGGBB",
+      "softAccent": "#RRGGBB",
+      "border": "#RRGGBB",
+      "heroBackground": "#RRGGBB",
+      "heroText": "#RRGGBB"
+    }},
+    "stageVariants": {{
+      "generic": {{"moodLabel": "max 4 Woerter", "panelTitle": "max 8 Woerter", "panelSummary": "max 18 Woerter"}},
+      "personalized": {{"moodLabel": "max 4 Woerter", "panelTitle": "max 8 Woerter", "panelSummary": "max 18 Woerter"}},
+      "transparent": {{"moodLabel": "max 4 Woerter", "panelTitle": "max 8 Woerter", "panelSummary": "max 18 Woerter"}}
+    }}
+  }},
+  "topBanner": {{"generic": "kurz", "personalized": "kurz", "transparent": "kurz"}},
+  "greeting": {{"personalized": "Hallo, Name", "transparent": "Hallo, Name"}},
+  "hero": {{
+    "generic": {{"headline": "kurz", "subtext": "kurz", "cta": "kurz"}},
+    "personalized": {{"headline": "kurz", "subtext": "kurz", "cta": "kurz"}},
+    "transparent": {{"headline": "kurz", "subtext": "kurz", "cta": "kurz"}}
+  }},
+  "navCategories": {{"generic": ["max", "6"], "personalized": ["max", "6"], "transparent": ["max", "6"]}},
   "sections": {{
-    "recommendations": {{"title": "kurz", "subtitle": "kurz"}},
-    "personal_picks": {{"title": "kurz", "subtitle": "kurz"}},
-    "local": {{"title": "kurz", "subtitle": "kurz"}}
+    "recommendations": {{
+      "generic": {{"title": "kurz", "subtitle": "kurz"}},
+      "personalized": {{"title": "kurz", "subtitle": "kurz"}},
+      "transparent": {{"title": "kurz", "subtitle": "kurz"}}
+    }},
+    "personal_picks": {{
+      "personalized": {{"title": "kurz", "subtitle": "kurz"}},
+      "transparent": {{"title": "kurz", "subtitle": "kurz"}}
+    }},
+    "local": {{
+      "generic": {{"title": "kurz", "subtitle": "kurz"}},
+      "personalized": {{"title": "kurz", "subtitle": "kurz"}},
+      "transparent": {{"title": "kurz", "subtitle": "kurz"}}
+    }}
   }},
   "productCopy": [
     {{"index": 0, "personalLabel": "max 10 Woerter", "transparencyReason": "max 22 Woerter"}}
@@ -463,10 +608,14 @@ Antworte NUR als JSON-Objekt in diesem Format:
 
 Regeln:
 - Schreibe auf Deutsch.
+- Erzeuge einen hochwertigen, realistischen E-Commerce-Look, passend zum Profil und zu den Produktbildern.
+- Generic muss wie ein neutraler Shop wirken, personalized darf eindeutig zugeschnitten wirken, transparent muss erklaeren ohne technisch zu wirken.
+- Nutze ausschliesslich HEX-Farben mit gutem Kontrast.
 - Bei Level 5 darf die Personalisierung bewusst sehr spezifisch wirken.
 - Bei Level 5 darf nur Produktindex 0 einen beilaeufigen oder invasiven Moment aufgreifen.
 - productCopy darf nur Indizes aus der Produktliste enthalten.
-- Wiederhole keine Produktdaten wie name, image, price oder shop."""
+- Wiederhole keine Produktdaten wie name, image, price oder shop.
+- Keine Buttons oder Interaktionslogik entwerfen; die Ausgabe beschreibt nur sichtbares Design und kurze Texte."""
             },
         ],
         response_format=JSON_RESPONSE_FORMAT,
@@ -481,24 +630,61 @@ def _apply_text(target, key, value, max_words):
         target[key] = _word_limit(value, max_words)
 
 
+def _apply_stage_text(target, value, max_words, default_stage="personalized"):
+    if isinstance(value, str):
+        _apply_text(target, default_stage, value, max_words)
+        return
+    if not isinstance(value, dict):
+        return
+    for stage in STAGE_KEYS:
+        _apply_text(target, stage, value.get(stage), max_words)
+
+
+def _apply_stage_list(target, value):
+    if isinstance(value, list):
+        cleaned = [_word_limit(item, 3) for item in value if str(item).strip()]
+        if cleaned:
+            target["personalized"] = cleaned[:6]
+            target["transparent"] = cleaned[:6]
+        return
+    if not isinstance(value, dict):
+        return
+    for stage in STAGE_KEYS:
+        raw_items = value.get(stage)
+        if not isinstance(raw_items, list):
+            continue
+        cleaned = [_word_limit(item, 3) for item in raw_items if str(item).strip()]
+        if cleaned:
+            target[stage] = cleaned[:6]
+
+
 def _apply_personalization(shop, personalization):
     if not isinstance(personalization, dict):
         return
 
-    _apply_text(shop["topBanner"], "personalized", personalization.get("topBanner"), 16)
-    _apply_text(shop["greeting"], "personalized", personalization.get("greeting"), 8)
+    design = _normalize_design(personalization.get("design"))
+    if design:
+        shop["design"] = design
+
+    _apply_stage_text(shop["topBanner"], personalization.get("topBanner"), 16)
+    _apply_stage_text(shop["greeting"], personalization.get("greeting"), 8)
 
     hero = personalization.get("hero")
     if isinstance(hero, dict):
-        _apply_text(shop["hero"]["personalized"], "headline", hero.get("headline"), 14)
-        _apply_text(shop["hero"]["personalized"], "subtext", hero.get("subtext"), 18)
-        _apply_text(shop["hero"]["personalized"], "cta", hero.get("cta"), 5)
+        if any(stage in hero for stage in STAGE_KEYS):
+            for stage in STAGE_KEYS:
+                stage_hero = hero.get(stage)
+                if not isinstance(stage_hero, dict):
+                    continue
+                _apply_text(shop["hero"][stage], "headline", stage_hero.get("headline"), 14)
+                _apply_text(shop["hero"][stage], "subtext", stage_hero.get("subtext"), 18)
+                _apply_text(shop["hero"][stage], "cta", stage_hero.get("cta"), 5)
+        else:
+            _apply_text(shop["hero"]["personalized"], "headline", hero.get("headline"), 14)
+            _apply_text(shop["hero"]["personalized"], "subtext", hero.get("subtext"), 18)
+            _apply_text(shop["hero"]["personalized"], "cta", hero.get("cta"), 5)
 
-    nav = personalization.get("navCategories")
-    if isinstance(nav, list):
-        cleaned = [_word_limit(item, 3) for item in nav if str(item).strip()]
-        if cleaned:
-            shop["navCategories"]["personalized"] = cleaned[:6]
+    _apply_stage_list(shop["navCategories"], personalization.get("navCategories"))
 
     section_copy = personalization.get("sections")
     if isinstance(section_copy, dict):
@@ -506,8 +692,16 @@ def _apply_personalization(shop, personalization):
             copy = section_copy.get(section["id"])
             if not isinstance(copy, dict):
                 continue
-            _apply_text(section["title"], "personalized", copy.get("title"), 10)
-            _apply_text(section["subtitle"], "personalized", copy.get("subtitle"), 16)
+            if any(stage in copy for stage in STAGE_KEYS):
+                for stage in STAGE_KEYS:
+                    stage_copy = copy.get(stage)
+                    if not isinstance(stage_copy, dict):
+                        continue
+                    _apply_text(section["title"], stage, stage_copy.get("title"), 10)
+                    _apply_text(section["subtitle"], stage, stage_copy.get("subtitle"), 16)
+            else:
+                _apply_text(section["title"], "personalized", copy.get("title"), 10)
+                _apply_text(section["subtitle"], "personalized", copy.get("subtitle"), 16)
 
     products_by_index = {}
     for section in shop["sections"]:
@@ -542,7 +736,7 @@ def build_shop(profile, products, level):
     normalized_products = _normalize_products(products)
     shop = _base_shop(profile, normalized_products, level)
 
-    if level <= 1 or not normalized_products:
+    if not normalized_products:
         _remove_internal_fields(shop)
         return shop
 
