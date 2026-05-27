@@ -8,6 +8,8 @@ let profile = null;
 let currentRatingStage = 'generic';
 let ratings = {};
 let lastProfileJson = '';
+let controlState = {};
+let controlStateSessionKey = '';
 
 const GENERIC_PRODUCTS = [
     { name: 'Classic T-Shirt', price: '29,99 EUR', image: '', shop: 'NOVA', rating: 4.5, reviews: 124 },
@@ -110,7 +112,45 @@ function getShopLevel(data) {
 }
 
 function getSignalValue(data, key) {
-    return (data?.usedSignals || []).find(signal => signal.key === key)?.value || '';
+    return getVisibleSignals(data).find(signal => signal.key === key)?.value || '';
+}
+
+function getControlSessionKey(data) {
+    return `${data?.generatedAt || ''}:${data?.level || ''}`;
+}
+
+function initializeControlState(data) {
+    const key = getControlSessionKey(data);
+    if (key && key !== controlStateSessionKey) {
+        controlState = {};
+        controlStateSessionKey = key;
+    }
+
+    (data?.controlOptions || []).forEach(option => {
+        if (!Object.prototype.hasOwnProperty.call(controlState, option.id)) {
+            controlState[option.id] = Boolean(option.enabled);
+        }
+    });
+}
+
+function isControlEnabled(id) {
+    return controlState[id] !== false;
+}
+
+function getVisibleSignals(data) {
+    const signals = data?.usedSignals || [];
+    return signals.filter(signal => {
+        if (signal.key === 'city' && !isControlEnabled('location')) return false;
+        if (['life_events', 'subtle_details'].includes(signal.key) && !isControlEnabled('subtle_mentions')) return false;
+        if (!['name', 'city'].includes(signal.key) && !isControlEnabled('interview_details')) return false;
+        return true;
+    });
+}
+
+function shouldShowProductPersonalization(product) {
+    if (!isControlEnabled('interview_details')) return false;
+    if (product.isCreepyMoment && !isControlEnabled('subtle_mentions')) return false;
+    return true;
 }
 
 function getProfileName(data) {
@@ -161,7 +201,7 @@ function renderHeroPersonalization(data, stage) {
     if (!banner || !kicker || !contextRow) return;
 
     const level = getShopLevel(data);
-    const shouldShowHyperSignals = stage !== 'generic' && level >= 4;
+    const shouldShowHyperSignals = stage !== 'generic' && level >= 4 && isControlEnabled('interview_details');
     banner.classList.toggle('hero-personalized', stage !== 'generic');
     banner.classList.toggle('hero-hyper', shouldShowHyperSignals);
 
@@ -178,12 +218,12 @@ function renderHeroPersonalization(data, stage) {
     kicker.textContent = name ? `Hallo ${name}` : 'Hallo';
     kicker.style.display = 'inline-flex';
 
-    const contextItems = [
-        getSignalValue(data, 'city'),
-        getSignalValue(data, 'interests'),
-        getSignalValue(data, 'price_sensitivity'),
-        level >= 5 ? data?.creepyMoment?.signal : ''
-    ].filter(Boolean).slice(0, 4);
+    const visibleSignals = getVisibleSignals(data);
+    const contextItems = visibleSignals
+        .filter(signal => signal.key !== 'name')
+        .map(signal => signal.value)
+        .filter(Boolean)
+        .slice(0, 4);
 
     contextRow.innerHTML = contextItems
         .map(item => `<span class="hero-context-chip">${escapeHtml(item)}</span>`)
@@ -201,7 +241,7 @@ function getImageHtml(product) {
 
 function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const imageHtml = getImageHtml(product);
-    const shouldPersonalize = stage !== 'generic';
+    const shouldPersonalize = stage !== 'generic' && shouldShowProductPersonalization(product);
     const badgeText = product.isCreepyMoment ? 'Aus dem Gespraech' : (stage === 'transparent' ? 'Empfohlen' : 'Fuer Sie');
     const badge = product.personalLabel && shouldPersonalize
         ? `<div class="product-badge">${escapeHtml(badgeText)}</div>`
@@ -239,11 +279,11 @@ function renderPersonalizationPanel(data, stage) {
         return;
     }
 
-    const signals = data.usedSignals || [];
+    const signals = getVisibleSignals(data);
     const signalChips = signals.length
         ? signals.map(signal => `<span class="signal-chip ${signal.sensitivity === 'high' ? 'sensitive' : ''}">${escapeHtml(signal.label)}: ${escapeHtml(signal.value)}</span>`).join('')
-        : '<span class="signal-chip">Keine sichtbaren Signale</span>';
-    const creepyMoment = data.creepyMoment && getShopLevel(data) >= 5
+        : '<span class="signal-chip">Personalisierung reduziert</span>';
+    const creepyMoment = data.creepyMoment && getShopLevel(data) >= 5 && isControlEnabled('subtle_mentions') && isControlEnabled('interview_details')
         ? `<div class="creepy-moment-banner"><strong>${escapeHtml(data.creepyMoment.headline)}</strong><p>${escapeHtml(data.creepyMoment.text)}</p></div>`
         : '';
     const transparentInfo = stage === 'transparent'
@@ -251,7 +291,9 @@ function renderPersonalizationPanel(data, stage) {
         : `<div class="signal-chip-row">${signalChips}</div>`;
     const variant = data.design?.stageVariants?.[getStageKey(stage)] || {};
     const panelTitle = variant.panelTitle || 'Personalisierungsprofil';
-    const panelSummary = variant.panelSummary || data.explanationDetails?.summary || 'Der Shop wurde anhand deines Interviewprofils angepasst.';
+    const panelSummary = isControlEnabled('interview_details')
+        ? (variant.panelSummary || data.explanationDetails?.summary || 'Der Shop wurde anhand deines Interviewprofils angepasst.')
+        : 'Persoenliche Interviewdetails sind aktuell ausgeblendet. Die Produktauswahl bleibt als Design-Stimulus sichtbar.';
     const moodLabel = variant.moodLabel || getStageLabel(stage);
 
     panel.innerHTML = `
@@ -268,21 +310,26 @@ function renderPersonalizationPanel(data, stage) {
 
 function renderControlCenter(data, stage) {
     const panel = document.getElementById('controlCenterPanel');
-    if (!panel || stage === 'generic' || !data || getShopLevel(data) < 4) {
+    const options = data?.controlOptions || [];
+    if (!panel || stage === 'generic' || !data || !options.length) {
         if (panel) panel.style.display = 'none';
         return;
     }
 
-    const options = data.controlOptions || [];
+    initializeControlState(data);
     const optionHtml = options.map(option => `
-        <div class="control-toggle ${option.enabled ? 'is-on' : 'is-off'}">
+        <label class="control-toggle ${isControlEnabled(option.id) ? 'is-on' : 'is-off'}">
+            <input class="control-toggle-input" type="checkbox" data-control-id="${escapeHtml(option.id)}" ${isControlEnabled(option.id) ? 'checked' : ''}>
             <span class="visual-switch"><span></span></span>
             <span><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></span>
-        </div>
+        </label>
     `).join('');
-    const sensitiveSignals = (data.usedSignals || []).filter(signal => signal.sensitivity === 'high');
+    const sensitiveSignals = getVisibleSignals(data).filter(signal => signal.sensitivity === 'high');
     const sensitiveButtons = stage === 'transparent' && sensitiveSignals.length
         ? `<div class="sensitive-controls">${sensitiveSignals.map(signal => `<span class="signal-visibility-pill">Sichtbar: ${escapeHtml(signal.label)}</span>`).join('')}</div>`
+        : '';
+    const controlHint = !isControlEnabled('interview_details')
+        ? '<p class="control-feedback">Interviewdetails sind ausgeblendet. Labels, Signale und Begruendungen werden reduziert.</p>'
         : '';
 
     panel.innerHTML = `
@@ -291,6 +338,7 @@ function renderControlCenter(data, stage) {
             <strong>Personalisierung anpassen</strong>
         </div>
         <div class="control-toggle-list">${optionHtml}</div>
+        ${controlHint}
         ${sensitiveButtons}
     `;
     panel.style.display = 'block';
@@ -324,6 +372,7 @@ function renderGenericShop() {
 
 function renderPersonalizedShop(data, stage) {
     const stageKey = getStageKey(stage);
+    initializeControlState(data);
     applyShopDesign(data, stage);
     document.getElementById('topBar').textContent = stageValue(data.topBanner, stage, 'Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht');
     document.getElementById('greeting').textContent = stage !== 'generic' ? stageValue(data.greeting, stage, '') : '';
@@ -387,6 +436,14 @@ function renderCustomTrustBadges(badges, stageKey) {
         return `<div class="trust-badge"><span class="trust-icon">${escapeHtml(icons[b.icon] || 'OK')}</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div></div>`;
     }).join('');
 }
+
+document.addEventListener('change', (event) => {
+    const input = event.target.closest('.control-toggle-input');
+    if (!input || !shopData || !currentStage || currentStage === 'generic') return;
+
+    controlState[input.dataset.controlId] = input.checked;
+    renderPersonalizedShop(shopData, currentStage);
+});
 
 async function fetchAndRender() {
     try {
