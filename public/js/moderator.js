@@ -53,6 +53,7 @@ let moderatorNotes = {};
 let lastRenderedTranscript = '';
 let lastRenderedProfile = '';
 let stageNoteDirty = false;
+let nameDirty = false;
 
 function el(id) {
     return document.getElementById(id);
@@ -161,6 +162,7 @@ el('levelSlider').addEventListener('input', event => {
 el('generateBtn').addEventListener('click', async () => {
     const btn = el('generateBtn');
     const level = parseInt(el('levelSlider').value, 10);
+    const name = el('nameInput').value.trim();
     btn.disabled = true;
     btn.textContent = 'Generiere...';
 
@@ -168,7 +170,7 @@ el('generateBtn').addEventListener('click', async () => {
         const response = await fetch('/api/shop/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId, level })
+            body: JSON.stringify({ session_id: sessionId, level, name })
         });
         if (!response.ok) throw new Error('Generation konnte nicht gestartet werden.');
         el('statusText').textContent = 'Shop-Generierung gestartet...';
@@ -234,6 +236,11 @@ function renderProfile(profile) {
     const serialized = JSON.stringify(profile || {});
     if (serialized === lastRenderedProfile) return;
     lastRenderedProfile = serialized;
+
+    const nameInput = el('nameInput');
+    if (nameInput && document.activeElement !== nameInput && !nameDirty && !nameInput.value) {
+        nameInput.value = profile.name && profile.name !== 'null' ? profile.name : '';
+    }
 
     const fields = [
         ['Name', profile.name],
@@ -324,6 +331,9 @@ renderStageScript();
 updateStageTimer();
 el('stageNote').addEventListener('input', () => {
     stageNoteDirty = true;
+});
+el('nameInput').addEventListener('input', () => {
+    nameDirty = true;
 });
 setInterval(updateStageTimer, 1000);
 pollStatus();

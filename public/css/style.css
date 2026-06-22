@@ -1105,6 +1105,26 @@ small {
     line-height: 1.5;
 }
 
+.mod-name-box {
+    margin-bottom: 16px;
+}
+
+.mod-name-box label {
+    color: rgba(255,255,255,0.62);
+    font-size: 12px;
+}
+
+.mod-name-box input {
+    width: 100%;
+    padding: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: white;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
 .btn-generate {
     width: 100%;
     padding: 14px;

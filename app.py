@@ -494,6 +494,7 @@ def generate_shop():
     data = request.json or {}
     session_id = data.get('session_id')
     level = data.get('level', 3)
+    name = (data.get('name') or '').strip()
 
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
@@ -502,6 +503,10 @@ def generate_shop():
         return jsonify({'error': 'Profile not ready yet'}), 400
 
     level = max(1, min(5, int(level)))
+
+    if name:
+        sessions[session_id].setdefault('profile', {})['name'] = name
+        save_session(session_id)
 
     thread = threading.Thread(target=generate_shop_pipeline, args=(session_id, level))
     thread.daemon = True
