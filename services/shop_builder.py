@@ -270,38 +270,58 @@ def _personalized_nav(profile):
 def _default_product_copy(product, profile, level, copy_index):
     """Liefert (personalLabel, transparencyReason).
 
-    - personalLabel: kurzer, dezenter Hinweis. Wird in der personalisierten UND
-      der transparenten Ansicht gezeigt. Verraet NICHT die Datengrundlage.
+    - personalLabel: persönliche, direkte Ansprache (mit Name und "du"). Wird in
+      der personalisierten UND der transparenten Ansicht gezeigt. Verraet NICHT
+      die Datengrundlage, klingt aber wie ein persönlicher Einkaufsberater.
     - transparencyReason: ehrliche Erklaerung der Datengrundlage. Wird NUR in der
       transparenten Ansicht (und im Erklaer-Fenster) gezeigt.
     """
+    name = _profile_value(profile, "name", "")
+    first = name.split()[0] if name and name != "Gast" else ""
+    city = _profile_value(profile, "city")
+    interest = _first_profile_item(profile, ["interests", "mentioned_products", "keywords"])
     detail = _creepy_detail(profile)
     query = product.get("search_query")
 
+    # --- Persönliche, abwechslungsreiche Ansprache ---
+    personal_label = ""
+    if level >= 2:
+        templates = []
+        if first and interest:
+            templates.append(f"{first}, das passt perfekt zu deiner Vorliebe für {interest}")
+        if interest:
+            templates.append(f"Wie gemacht für alles rund um {interest}")
+        if first:
+            templates.append(f"Wie für dich gemacht, {first}")
+            templates.append(f"{first}, daran wirst du lange Freude haben")
+            templates.append(f"{first}, das haben wir an dich gedacht")
+        if first and city:
+            templates.append(f"{first}, damit bist du in {city} bestens dabei")
+        if not templates:
+            templates = ["Für dich ausgewählt", "Das könnte genau dein Ding sein", "Wie für dich gemacht"]
+        personal_label = templates[copy_index % len(templates)]
+
+    # --- Ehrliche Erklärung (nur transparente Ansicht) ---
+    transparency_reason = ""
     if level >= 5 and copy_index == 0 and detail:
-        return (
-            "Speziell für dich ausgewählt",
+        transparency_reason = (
+            f"{first}, diese Empfehlung greift ein Detail aus deinem Gespräch auf: {detail}."
+            if first else
             f"Diese Empfehlung greift ein Detail aus deinem Gespräch auf: {detail}."
         )
-    if level >= 4 and query:
-        return (
-            "Passend zu deinen Interessen",
-            f"Diese Empfehlung wurde aus deinem abgeleiteten Suchkontext gebildet: {query}."
-        )
-    if level >= 2:
-        return (
-            "Für dich empfohlen",
-            "Diese Empfehlung basiert auf den Interessen, die du im Interview genannt hast."
-        )
+    elif level >= 4 and query:
+        transparency_reason = f"Diese Empfehlung haben wir aus deinem abgeleiteten Suchkontext gebildet: {query}."
+    elif level >= 2:
+        transparency_reason = "Diese Empfehlung basiert auf den Interessen, die du im Interview genannt hast."
 
-    return "", ""
+    return personal_label, transparency_reason
 
 
 def _build_product(product, profile, level, copy_index):
     personal_label, transparency_reason = _default_product_copy(product, profile, level, copy_index)
     result = dict(product)
     result["_copy_index"] = copy_index
-    result["personalLabel"] = _word_limit(personal_label, 10)
+    result["personalLabel"] = _word_limit(personal_label, 14)
     result["transparencyReason"] = _word_limit(transparency_reason, 24)
     result["whyDetails"] = transparency_reason
     result["signalKeys"] = ["interests", "keywords"] if level >= 2 else []
@@ -390,10 +410,16 @@ def _base_shop(profile, products, level, generic_products=None):
     if level >= 2 and city:
         personalized_banner = f"Kostenloser Versand nach {city} | 30 Tage Rückgaberecht"
 
+    first = name.split()[0] if name and name != "Gast" else ""
     hero_focus = interest or "deinen Alltag"
-    hero_headline = f"Ausgewählt für {hero_focus}"
-    if level >= 5 and creepy_detail:
-        hero_headline = f"{name}, für dich kuratiert"
+    if first and interest:
+        hero_headline = f"{first}, ausgewählt für deine Vorliebe für {interest}"
+    elif first:
+        hero_headline = f"{first}, das haben wir für dich zusammengestellt"
+    else:
+        hero_headline = f"Ausgewählt für {hero_focus}"
+    if level >= 5 and creepy_detail and first:
+        hero_headline = f"{first}, ganz auf dich zugeschnitten"
 
     creepy_moment = None
     if level >= 5 and creepy_detail:
@@ -412,7 +438,7 @@ def _base_shop(profile, products, level, generic_products=None):
         },
         "greeting": {
             "generic": "",
-            "personalized": f"Hallo, {name}" if name else "Hallo",
+            "personalized": f"Willkommen zurück, {first}" if first else "Willkommen zurück",
         },
         "hero": {
             "generic": {
@@ -422,8 +448,12 @@ def _base_shop(profile, products, level, generic_products=None):
             },
             "personalized": {
                 "headline": hero_headline,
-                "subtext": "Produkte, die zu deinem Interviewprofil passen.",
-                "cta": "Empfehlungen ansehen",
+                "subtext": (
+                    f"Schön, dass du da bist, {first}. Wir haben den Shop ganz auf dich abgestimmt – passend zu dem, was dich gerade bewegt."
+                    if first else
+                    "Schön, dass du da bist. Wir haben den Shop ganz auf dich abgestimmt – passend zu deinen Interessen."
+                ),
+                "cta": "Für dich entdecken",
             },
         },
         "navCategories": {
@@ -527,8 +557,11 @@ def _request_personalization(profile, product_context, level):
         messages=[
             {
                 "role": "system",
-                "content": """Du personalisierst einen bestehenden Online-Shop. Erzeuge nur kurze Texte und kurze Produktlabels.
-Gib niemals vollständige Produktobjekte zurück. Verwende nur die angegebenen Produkt-Indexnummern.
+                "content": """Du bist der persönliche Einkaufsberater eines bestehenden Online-Shops und personalisierst ihn für genau eine Person.
+Sprich die Person durchgehend direkt, warm und persönlich an: per Vorname und in der "du"-Form.
+Beziehe dich konkret auf ihre Interessen, ihren Kontext und ihre Lebenslage, sodass sich die Texte wie für sie gemacht anfühlen.
+Erzeuge nur kurze Texte und kurze Produktlabels. Gib niemals vollständige Produktobjekte zurück.
+Verwende nur die angegebenen Produkt-Indexnummern.
 Verwende immer korrekte deutsche Umlaute (ä, ö, ü, ß) statt ae, oe, ue, ss."""
             },
             {
@@ -559,8 +592,12 @@ Antworte NUR als JSON-Objekt in diesem Format:
 
 Regeln:
 - Schreibe auf Deutsch mit korrekten Umlauten (ä, ö, ü, ß).
-- personalLabel ist ein dezenter, verkaufsorientierter Hinweis und darf NICHT verraten, woher die Daten stammen.
-- transparencyReason erklärt ehrlich die Datengrundlage (z. B. genannte Interessen oder Suchkontext).
+- Sprich die Person durchgehend direkt an: mit ihrem Vornamen und in der "du"-Form.
+- greeting, hero.headline und hero.subtext sollen die Person beim Namen nennen und sich persönlich anfühlen.
+- Nutze in möglichst vielen productCopy-Einträgen den Vornamen und einen konkreten Bezug zu Interessen/Kontext der Person.
+- personalLabel ist eine warme, persönliche Ansprache (6-12 Wörter), wie von einem persönlichen Einkaufsberater. Es darf NICHT verraten, woher die Daten stammen (kein "laut Interview", kein "wir haben getrackt").
+- Variiere die personalLabels, wiederhole nicht ständig denselben Satz.
+- transparencyReason erklärt dagegen ehrlich und sachlich die Datengrundlage (z. B. genannte Interessen oder Suchkontext).
 - Bei Level 5 darf transparencyReason für Produktindex 0 einen beiläufigen oder invasiven Moment offenlegen.
 - productCopy darf nur Indizes aus der Produktliste enthalten.
 - Wiederhole keine Produktdaten wie name, image, price oder shop."""
@@ -625,7 +662,7 @@ def _apply_personalization(shop, personalization):
         product = products_by_index.get(index)
         if not product:
             continue
-        _apply_text(product, "personalLabel", item.get("personalLabel"), 10)
+        _apply_text(product, "personalLabel", item.get("personalLabel"), 14)
         _apply_text(product, "transparencyReason", item.get("transparencyReason"), 24)
         reason = item.get("transparencyReason")
         if isinstance(reason, str) and reason.strip():
