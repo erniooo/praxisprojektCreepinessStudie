@@ -114,9 +114,6 @@ function renderStageScript() {
         <div class="stage-script-kicker">${escapeHtml(stageLabels[currentStage] || currentStage)}</div>
         <p class="stage-script-goal">${escapeHtml(script.goal || '')}</p>
         <ol class="stage-question-list">${questions}</ol>
-        <div class="stage-rating-reminder">
-            Nach dieser Stage Mini-Rating anzeigen: Hilfreichkeit, Nachvollziehbarkeit, Unheimlichkeit, Vertrauen.
-        </div>
     `;
 
     const noteInput = el('stageNote');
@@ -128,7 +125,6 @@ function renderStageScript() {
 function showShopControls() {
     el('shopControls').style.display = 'block';
     el('releaseBtn').style.display = 'block';
-    el('ratingsBtn').style.display = 'block';
     el('stageScriptCard').style.display = 'block';
     renderExportLinks();
     renderStageScript();
@@ -143,40 +139,6 @@ function renderExportLinks() {
     jsonLink.href = `/api/session/export?session=${encodeURIComponent(sessionId)}&format=json`;
     csvLink.href = `/api/session/export?session=${encodeURIComponent(sessionId)}&format=csv`;
     box.style.display = 'block';
-}
-
-function renderRatingsSummary(data) {
-    const result = el('ratingsResult');
-    if (!result) return;
-
-    const entries = Object.values(data.ratingsByStage || {})
-        .filter(entry => entry && entry.ratings)
-        .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
-
-    if (!entries.length && data.ratings) {
-        entries.push({ stage: data.stage || currentStage, ratings: data.ratings });
-    }
-
-    if (!entries.length) {
-        result.style.display = 'none';
-        result.innerHTML = '';
-        return;
-    }
-
-    result.style.display = 'block';
-    result.style.opacity = '1';
-    result.innerHTML = entries.map(entry => {
-        const ratings = entry.ratings || {};
-        return `
-            <div class="stage-rating-row">
-                <span>${escapeHtml(stageLabels[entry.stage] || entry.stage || 'Stage')}</span>
-                <strong>H ${escapeHtml(ratings.helpfulness || '-')}</strong>
-                <strong>N ${escapeHtml(ratings.comprehensibility || '-')}</strong>
-                <strong>U ${escapeHtml(ratings.creepiness || '-')}</strong>
-                <strong>V ${escapeHtml(ratings.trust || '-')}</strong>
-            </div>
-        `;
-    }).join('');
 }
 
 async function setStage(stage) {
@@ -231,17 +193,6 @@ el('releaseBtn').addEventListener('click', async () => {
     el('releaseBtn').disabled = true;
     el('linkBox').style.display = 'block';
     el('participantLink').value = `${window.location.origin}/shop.html?session=${sessionId}`;
-});
-
-el('ratingsBtn').addEventListener('click', async () => {
-    const btn = el('ratingsBtn');
-    btn.disabled = true;
-    btn.textContent = `Mini-Rating fuer ${stageLabels[currentStage] || currentStage} laeuft...`;
-    await fetch('/api/stage/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, stage: 'show_ratings' })
-    });
 });
 
 el('saveNoteBtn').addEventListener('click', async () => {
@@ -305,20 +256,6 @@ function renderProfile(profile) {
     el('profileCard').style.display = 'block';
 }
 
-function updateRatingsButton(status) {
-    const btn = el('ratingsBtn');
-    if (!btn || btn.style.display === 'none') return;
-
-    if (status === 'show_ratings') {
-        btn.disabled = true;
-        btn.textContent = `Warte auf Bewertung fuer ${stageLabels[currentStage] || currentStage}...`;
-        return;
-    }
-
-    btn.disabled = false;
-    btn.textContent = `Mini-Rating jetzt anzeigen (${stageLabels[currentStage] || currentStage})`;
-}
-
 async function pollStatus() {
     try {
         const response = await fetch(`/api/session/status?session=${sessionId}`);
@@ -354,7 +291,7 @@ async function pollStatus() {
             renderStageScript();
         }
 
-        if (data.shopData || ['shop_generated', 'shop_ready', 'show_ratings'].includes(data.status)) {
+        if (data.shopData || ['shop_generated', 'shop_ready'].includes(data.status)) {
             showShopControls();
         }
 
@@ -377,8 +314,6 @@ async function pollStatus() {
             generateBtn.disabled = false;
         }
 
-        renderRatingsSummary(data);
-        updateRatingsButton(data.status);
     } catch (err) {
         el('statusText').textContent = err.message;
     }
