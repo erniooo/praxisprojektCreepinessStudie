@@ -46,8 +46,8 @@ SIGNAL_LABELS = {
     "brands": "Genannte Marken",
     "life_events": "Aktuelle Lebenslage",
     "price_sensitivity": "Budgethinweis",
-    "mentioned_products": "Erwaehnte Produkte",
-    "subtle_details": "Beilaeufige Aussage",
+    "mentioned_products": "Erwähnte Produkte",
+    "subtle_details": "Beiläufige Aussage",
     "keywords": "Interview-Keywords",
 }
 
@@ -94,20 +94,20 @@ def _stage_metadata(level):
         2: ("Harmlos personalisiert", "Name, Stadt und grobe Interessen werden sichtbar."),
         3: ("Deutlich personalisiert", "Mehrere Interviewsignale werden kombiniert."),
         4: ("Hyperpersonalisiert", "Cross-Context aus Interviewaussagen wird angedeutet."),
-        5: ("Creepy Peak", "Genau ein beilaeufiger Interviewmoment wird sichtbar aufgegriffen."),
+        5: ("Creepy Peak", "Genau ein beiläufiger Interviewmoment wird sichtbar aufgegriffen."),
     }
     label, description = labels.get(level, labels[3])
     return {
         "level": level,
         "label": label,
         "description": description,
-        "dimensions": ["Treffsicherheit", "Datensensitivitaet", "Transparenz", "Kontrolle", "Beobachtungsgefuehl"],
+        "dimensions": ["Treffsicherheit", "Datensensitivität", "Transparenz", "Kontrolle", "Beobachtungsgefühl"],
         "stageScripts": {
             "generic": {
                 "goal": "Baseline-Reaktion ohne Priming erfassen.",
                 "questions": [
-                    "Was faellt dir zuerst auf?",
-                    "Wie normal oder glaubwuerdig wirkt die Seite?",
+                    "Was fällt dir zuerst auf?",
+                    "Wie normal oder glaubwürdig wirkt die Seite?",
                     "Was wirkt passend, was unpassend?"
                 ]
             },
@@ -120,11 +120,11 @@ def _stage_metadata(level):
                 ]
             },
             "transparent": {
-                "goal": "Transparenz, Kontrolle und moegliche Uebertransparenz pruefen.",
+                "goal": "Transparenz, Kontrolle und mögliche Übertransparenz prüfen.",
                 "questions": [
-                    "Hilft dir die Erklaerung oder macht sie es unangenehmer?",
+                    "Hilft dir die Erklärung oder macht sie es unangenehmer?",
                     "Welche Informationen sollte ein Shop nicht nutzen?",
-                    "Was wuerdest du gern selbst steuern oder ausschalten?"
+                    "Was würdest du gern selbst steuern oder ausschalten?"
                 ]
             }
         }
@@ -132,6 +132,8 @@ def _stage_metadata(level):
 
 
 def _control_options(level, signals):
+    """Realistische Kontrollcenter-Optionen (Toggles), wie man sie in einem
+    echten Datenschutz-/Personalisierungscenter erwarten wuerde."""
     signal_keys = {signal["key"] for signal in signals}
     return [
         {
@@ -141,22 +143,67 @@ def _control_options(level, signals):
             "enabled": level >= 2 and "city" in signal_keys,
         },
         {
+            "id": "interests",
+            "label": "Interessen verwenden",
+            "description": "Im Interview genannte Interessen für die Produktauswahl nutzen.",
+            "enabled": level >= 2,
+        },
+        {
             "id": "interview_details",
             "label": "Interviewdetails verwenden",
-            "description": "Aussagen aus dem Gespraech fuer Produktauswahl und Texte nutzen.",
+            "description": "Aussagen aus dem Gespräch für Produktauswahl und Texte nutzen.",
             "enabled": level >= 3,
         },
         {
             "id": "subtle_mentions",
-            "label": "Beilaeufige Aussagen verwenden",
-            "description": "Auch nebenbei erwaehnte Details in Empfehlungen einbeziehen.",
+            "label": "Beiläufig Erwähntes verwenden",
+            "description": "Auch nebenbei erwähnte Details in Empfehlungen einbeziehen.",
             "enabled": level >= 5 and "subtle_details" in signal_keys,
         },
         {
             "id": "similar_customers",
-            "label": "Aehnliche Kunden verwenden",
-            "description": "Dein Profil mit aehnlichen Einkaufsmustern vergleichen.",
+            "label": "Ähnliche Kunden verwenden",
+            "description": "Dein Profil mit ähnlichen Einkaufsmustern vergleichen.",
             "enabled": level >= 4,
+        },
+        {
+            "id": "browsing_history",
+            "label": "Klick- und Ansichtsverlauf verwenden",
+            "description": "Verhalten im Shop für die Reihenfolge der Produkte berücksichtigen.",
+            "enabled": True,
+        },
+        {
+            "id": "ads_personalization",
+            "label": "Personalisierte Werbung",
+            "description": "Werbliche Hinweise und Banner auf dein Profil zuschneiden.",
+            "enabled": level >= 3,
+        },
+    ]
+
+
+def _control_actions(level):
+    """Einmalige Steuerungs-Aktionen (Buttons), wie sie in einem
+    Kontrollcenter zusätzlich zu den Schaltern vorkommen können."""
+    return [
+        {
+            "id": "pause_personalization",
+            "label": "Personalisierung pausieren",
+            "description": "Den Shop vorübergehend ohne jede Personalisierung anzeigen.",
+        },
+        {
+            "id": "less_category",
+            "label": "Weniger Produkte dieser Art",
+            "description": "Ähnliche Empfehlungen künftig seltener anzeigen.",
+        },
+        {
+            "id": "reset_profile",
+            "label": "Profildaten zurücksetzen",
+            "description": "Alle aus dem Gespräch abgeleiteten Daten löschen.",
+        },
+        {
+            "id": "view_data",
+            "label": "Meine gespeicherten Daten ansehen",
+            "description": "Übersicht aller Signale anzeigen, die der Shop nutzt.",
         },
     ]
 
@@ -221,23 +268,30 @@ def _personalized_nav(profile):
 
 
 def _default_product_copy(product, profile, level, copy_index):
+    """Liefert (personalLabel, transparencyReason).
+
+    - personalLabel: kurzer, dezenter Hinweis. Wird in der personalisierten UND
+      der transparenten Ansicht gezeigt. Verraet NICHT die Datengrundlage.
+    - transparencyReason: ehrliche Erklaerung der Datengrundlage. Wird NUR in der
+      transparenten Ansicht (und im Erklaer-Fenster) gezeigt.
+    """
     detail = _creepy_detail(profile)
     query = product.get("search_query")
 
     if level >= 5 and copy_index == 0 and detail:
         return (
-            "Greift ein Interviewdetail auf",
-            f"Auch wenn du es nur kurz erwaehnt hast, wurde dieses Detail beruecksichtigt: {detail}."
+            "Speziell für dich ausgewählt",
+            f"Diese Empfehlung greift ein Detail aus deinem Gespräch auf: {detail}."
         )
     if level >= 4 and query:
         return (
-            "Aus deinem Suchkontext abgeleitet",
-            f"Diese Empfehlung folgt aus dem abgeleiteten Suchkontext: {query}."
+            "Passend zu deinen Interessen",
+            f"Diese Empfehlung wurde aus deinem abgeleiteten Suchkontext gebildet: {query}."
         )
     if level >= 2:
         return (
-            "Passt zu deinem Profil",
-            "Diese Empfehlung basiert auf Interessen aus dem Interview."
+            "Für dich empfohlen",
+            "Diese Empfehlung basiert auf den Interessen, die du im Interview genannt hast."
         )
 
     return "", ""
@@ -248,7 +302,7 @@ def _build_product(product, profile, level, copy_index):
     result = dict(product)
     result["_copy_index"] = copy_index
     result["personalLabel"] = _word_limit(personal_label, 10)
-    result["transparencyReason"] = _word_limit(transparency_reason, 22)
+    result["transparencyReason"] = _word_limit(transparency_reason, 24)
     result["whyDetails"] = transparency_reason
     result["signalKeys"] = ["interests", "keywords"] if level >= 2 else []
     result["isCreepyMoment"] = level >= 5 and copy_index == 0 and bool(_creepy_detail(profile))
@@ -260,18 +314,18 @@ def _split_products(products, profile, level):
         return {
             "recommendations": [
                 _build_product(product, profile, level, index)
-                for index, product in enumerate(products[:8])
+                for index, product in enumerate(products[:12])
             ],
             "personal_picks": [],
             "local": [],
         }
 
-    rec_count = 6 if len(products) > 8 else min(len(products), 8)
-    selected = products[:14]
+    selected = products[:20]
+    rec_count = 8 if len(selected) > 10 else min(len(selected), 8)
     sections = {
         "recommendations": selected[:rec_count],
-        "personal_picks": selected[rec_count:rec_count + 4],
-        "local": selected[rec_count + 4:rec_count + 8],
+        "personal_picks": selected[rec_count:rec_count + 6],
+        "local": selected[rec_count + 6:rec_count + 12],
     }
 
     copy_index = 0
@@ -285,36 +339,75 @@ def _split_products(products, profile, level):
     return decorated
 
 
-def _base_shop(profile, products, level):
+def _build_generic_sections(generic_products):
+    """Baut neutrale Baseline-Sektionen aus NICHT personalisierten Produkten.
+
+    Diese Produkte unterscheiden sich bewusst von den personalisierten
+    Empfehlungen, damit Generic- und Personalisiert-Ansicht echt verschieden sind.
+    """
+    normalized = _normalize_products(generic_products)
+    if not normalized:
+        return []
+
+    chunks = [
+        ("generic_bestseller", "Bestseller diese Woche", "Die beliebtesten Produkte unserer Kundinnen und Kunden", normalized[:8]),
+        ("generic_new", "Neu eingetroffen", "Frisch in unserem Sortiment", normalized[8:14]),
+        ("generic_deals", "Beliebte Angebote", "Lohnenswerte Produkte rund um Alltag und Freizeit", normalized[14:20]),
+    ]
+
+    sections = []
+    for section_id, title, subtitle, items in chunks:
+        if not items:
+            continue
+        clean_items = []
+        for product in items:
+            entry = dict(product)
+            entry["personalLabel"] = ""
+            entry["transparencyReason"] = ""
+            entry["whyDetails"] = ""
+            entry["signalKeys"] = []
+            entry["isCreepyMoment"] = False
+            clean_items.append(entry)
+        sections.append({
+            "id": section_id,
+            "title": title,
+            "subtitle": subtitle,
+            "products": clean_items,
+        })
+    return sections
+
+
+def _base_shop(profile, products, level, generic_products=None):
     name = _profile_value(profile, "name", "Gast")
     city = _profile_value(profile, "city")
     interest = _first_profile_item(profile, ["interests", "mentioned_products", "keywords"])
     signals = _collect_used_signals(profile, level)
     creepy_detail = _creepy_detail(profile)
     section_products = _split_products(products, profile, level)
+    generic_sections = _build_generic_sections(generic_products or [])
 
-    personalized_banner = "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht"
+    personalized_banner = "Kostenloser Versand ab 50 EUR | 30 Tage Rückgaberecht"
     if level >= 2 and city:
-        personalized_banner = f"Kostenloser Versand nach {city} | 30 Tage Rueckgaberecht"
+        personalized_banner = f"Kostenloser Versand nach {city} | 30 Tage Rückgaberecht"
 
     hero_focus = interest or "deinen Alltag"
-    hero_headline = f"Ausgewaehlt fuer {hero_focus}"
+    hero_headline = f"Ausgewählt für {hero_focus}"
     if level >= 5 and creepy_detail:
-        hero_headline = f"{name}, fuer das Detail aus unserem Gespraech kuratiert"
+        hero_headline = f"{name}, für dich kuratiert"
 
     creepy_moment = None
     if level >= 5 and creepy_detail:
         creepy_moment = {
             "productIndex": 0,
             "signal": creepy_detail,
-            "headline": "Auch kurz Erwaehntes fliesst ein",
-            "text": f"Auch wenn du es nur kurz erwaehnt hast: {creepy_detail} wurde bei diesen Empfehlungen beruecksichtigt."
+            "headline": "Auch kurz Erwähntes fließt ein",
+            "text": f"Auch wenn du es nur kurz erwähnt hast: {creepy_detail} wurde bei diesen Empfehlungen berücksichtigt."
         }
 
     return {
         "level": level,
         "topBanner": {
-            "generic": "Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht",
+            "generic": "Kostenloser Versand ab 50 EUR | 30 Tage Rückgaberecht",
             "personalized": personalized_banner,
         },
         "greeting": {
@@ -323,7 +416,7 @@ def _base_shop(profile, products, level):
         },
         "hero": {
             "generic": {
-                "headline": "Fruehjahr Kollektion 2026",
+                "headline": "Frühjahr Kollektion 2026",
                 "subtext": "Entdecke die neuesten Trends",
                 "cta": "Jetzt shoppen",
             },
@@ -337,12 +430,13 @@ def _base_shop(profile, products, level):
             "generic": ["Neu", "Bestseller", "Mode", "Sport", "Tech", "Lifestyle"],
             "personalized": _personalized_nav(profile),
         },
+        "genericSections": generic_sections,
         "sections": [
             {
                 "id": "recommendations",
                 "title": {
                     "generic": "Unsere Empfehlungen",
-                    "personalized": f"{name}, fuer dich ausgewaehlt",
+                    "personalized": f"{name}, für dich ausgewählt",
                 },
                 "subtitle": {
                     "generic": "Die beliebtesten Produkte dieser Woche",
@@ -354,7 +448,7 @@ def _base_shop(profile, products, level):
                 "id": "personal_picks",
                 "title": {
                     "generic": None,
-                    "personalized": f"{name}, das koennte dir gefallen",
+                    "personalized": f"{name}, das könnte dir gefallen",
                 },
                 "subtitle": {
                     "generic": None,
@@ -366,11 +460,11 @@ def _base_shop(profile, products, level):
                 "id": "local",
                 "title": {
                     "generic": "Beliebt diese Woche",
-                    "personalized": f"Beliebt in {city}" if city else "Beliebt bei aehnlichen Kunden",
+                    "personalized": f"Beliebt in {city}" if city else "Beliebt bei ähnlichen Kunden",
                 },
                 "subtitle": {
                     "generic": "Was andere Kunden kaufen",
-                    "personalized": "Was zu deinem Kontext passen koennte",
+                    "personalized": "Was zu deinem Kontext passen könnte",
                 },
                 "products": section_products["local"],
             },
@@ -389,13 +483,13 @@ def _base_shop(profile, products, level):
             },
             {
                 "icon": "return",
-                "title": {"generic": "Einfache Rueckgabe", "personalized": "Einfache Rueckgabe"},
+                "title": {"generic": "Einfache Rückgabe", "personalized": "Einfache Rückgabe"},
                 "text": {"generic": "30 Tage kostenlos", "personalized": "30 Tage kostenlos"},
             },
             {
                 "icon": "lock",
                 "title": {"generic": "Sicherer Kauf", "personalized": "Sicherer Kauf"},
-                "text": {"generic": "SSL verschluesselt", "personalized": "SSL verschluesselt"},
+                "text": {"generic": "SSL verschlüsselt", "personalized": "SSL verschlüsselt"},
             },
         ],
         "usedSignals": signals,
@@ -407,6 +501,7 @@ def _base_shop(profile, products, level):
             "productIntro": "Warum dieses Produkt angezeigt wird"
         },
         "controlOptions": _control_options(level, signals),
+        "controlActions": _control_actions(level),
         "stageMetadata": _stage_metadata(level),
     }
 
@@ -433,7 +528,8 @@ def _request_personalization(profile, product_context, level):
             {
                 "role": "system",
                 "content": """Du personalisierst einen bestehenden Online-Shop. Erzeuge nur kurze Texte und kurze Produktlabels.
-Gib niemals vollstaendige Produktobjekte zurueck. Verwende nur die angegebenen Produkt-Indexnummern."""
+Gib niemals vollständige Produktobjekte zurück. Verwende nur die angegebenen Produkt-Indexnummern.
+Verwende immer korrekte deutsche Umlaute (ä, ö, ü, ß) statt ae, oe, ue, ss."""
             },
             {
                 "role": "user",
@@ -457,14 +553,15 @@ Antworte NUR als JSON-Objekt in diesem Format:
     "local": {{"title": "kurz", "subtitle": "kurz"}}
   }},
   "productCopy": [
-    {{"index": 0, "personalLabel": "max 10 Woerter", "transparencyReason": "max 22 Woerter"}}
+    {{"index": 0, "personalLabel": "max 10 Wörter", "transparencyReason": "max 22 Wörter"}}
   ]
 }}
 
 Regeln:
-- Schreibe auf Deutsch.
-- Bei Level 5 darf die Personalisierung bewusst sehr spezifisch wirken.
-- Bei Level 5 darf nur Produktindex 0 einen beilaeufigen oder invasiven Moment aufgreifen.
+- Schreibe auf Deutsch mit korrekten Umlauten (ä, ö, ü, ß).
+- personalLabel ist ein dezenter, verkaufsorientierter Hinweis und darf NICHT verraten, woher die Daten stammen.
+- transparencyReason erklärt ehrlich die Datengrundlage (z. B. genannte Interessen oder Suchkontext).
+- Bei Level 5 darf transparencyReason für Produktindex 0 einen beiläufigen oder invasiven Moment offenlegen.
 - productCopy darf nur Indizes aus der Produktliste enthalten.
 - Wiederhole keine Produktdaten wie name, image, price oder shop."""
             },
@@ -529,18 +626,24 @@ def _apply_personalization(shop, personalization):
         if not product:
             continue
         _apply_text(product, "personalLabel", item.get("personalLabel"), 10)
-        _apply_text(product, "transparencyReason", item.get("transparencyReason"), 22)
+        _apply_text(product, "transparencyReason", item.get("transparencyReason"), 24)
+        reason = item.get("transparencyReason")
+        if isinstance(reason, str) and reason.strip():
+            product["whyDetails"] = reason.strip()
 
 
 def _remove_internal_fields(shop):
     for section in shop["sections"]:
         for product in section["products"]:
             product.pop("_copy_index", None)
+    for section in shop.get("genericSections", []):
+        for product in section["products"]:
+            product.pop("_copy_index", None)
 
 
-def build_shop(profile, products, level):
+def build_shop(profile, products, level, generic_products=None):
     normalized_products = _normalize_products(products)
-    shop = _base_shop(profile, normalized_products, level)
+    shop = _base_shop(profile, normalized_products, level, generic_products)
 
     if level <= 1 or not normalized_products:
         _remove_internal_fields(shop)

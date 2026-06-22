@@ -411,8 +411,8 @@ small {
 /* Product Grid - Shopify Style */
 .products-grid-new {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 20px;
 }
 
 .product-card-new {
@@ -433,7 +433,7 @@ small {
 .product-image-new {
     position: relative;
     width: 100%;
-    height: 320px;
+    height: 210px;
     background: #f8f8f8;
     overflow: hidden;
 }
@@ -2009,8 +2009,8 @@ small {
 }
 
 .products-grid-new {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 22px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 18px;
 }
 
 .product-card-new {
@@ -2028,7 +2028,7 @@ small {
 }
 
 .product-image-new {
-    height: 300px;
+    height: 210px;
     background: #ecefeb;
 }
 
@@ -2145,4 +2145,52 @@ small {
     .stage-buttons-mod {
         flex-direction: column;
     }
+}
+
+
+/* ===== PER-PRODUCT TRANSPARENCY & CONTROL MODAL ===== */
+.modal-why-reason {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    margin-bottom: 18px;
+}
+.modal-control-section {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-color);
+}
+.modal-control-section > strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+.modal-control-section > p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+}
+.modal-control-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.modal-control-list .control-toggle {
+    margin: 0;
+}
+.modal-signal-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.modal-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.modal-action-row .reject-signal-btn,
+.modal-action-row .modal-secondary-btn {
+    flex: 1 1 auto;
 }

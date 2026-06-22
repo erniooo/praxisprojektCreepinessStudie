@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from services.transcriber import transcribe_audio
 from services.speaker_separator import separate_speakers
 from services.profile_extractor import extract_profile
-from services.product_finder import find_products
+from services.product_finder import find_products, find_generic_products
 from services.shop_builder import build_shop
 
 load_dotenv()
@@ -228,11 +228,13 @@ def generate_shop_pipeline(session_id, level):
         sessions[session_id]['status'] = 'generating_shop'
         sessions[session_id]['progress'] = 'Suche passende Produkte...'
         products = find_products(profile, level)
+        generic_products = find_generic_products()
         sessions[session_id]['products'] = products
+        sessions[session_id]['generic_products'] = generic_products
 
         # Step 5: Build base shop and apply compact personalization
         sessions[session_id]['progress'] = 'Personalisiere Grundshop...'
-        shop_data = build_shop(profile, products, level)
+        shop_data = build_shop(profile, products, level, generic_products)
         shop_data['generatedAt'] = now_iso()
         sessions[session_id]['shop_data'] = shop_data
         sessions[session_id]['level'] = level

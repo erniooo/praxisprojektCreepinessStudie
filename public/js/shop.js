@@ -7,16 +7,21 @@ let shopData = null;
 let profile = null;
 let currentRatingStage = 'generic';
 let ratings = {};
+let renderedSections = [];
 
 const GENERIC_PRODUCTS = [
     { name: 'Classic T-Shirt', price: '29,99 EUR', image: '', shop: 'NOVA', rating: 4.5, reviews: 124 },
-    { name: 'Wireless Kopfhoerer', price: '79,99 EUR', image: '', shop: 'NOVA', rating: 4.7, reviews: 203 },
+    { name: 'Wireless Kopfhörer', price: '79,99 EUR', image: '', shop: 'NOVA', rating: 4.7, reviews: 203 },
     { name: 'Fitness Tracker', price: '49,99 EUR', image: '', shop: 'NOVA', rating: 4.3, reviews: 89 },
-    { name: 'Kuechenwaage Premium', price: '24,99 EUR', image: '', shop: 'NOVA', rating: 4.6, reviews: 156 },
+    { name: 'Küchenwaage Premium', price: '24,99 EUR', image: '', shop: 'NOVA', rating: 4.6, reviews: 156 },
     { name: 'Pflegeset Natural', price: '39,99 EUR', image: '', shop: 'NOVA', rating: 4.4, reviews: 67 },
     { name: 'Bestseller des Monats', price: '16,99 EUR', image: '', shop: 'NOVA', rating: 4.8, reviews: 312 },
     { name: 'Trinkflasche 750ml', price: '22,99 EUR', image: '', shop: 'NOVA', rating: 4.5, reviews: 178 },
-    { name: 'Leder Geldboerse', price: '44,99 EUR', image: '', shop: 'NOVA', rating: 4.6, reviews: 95 }
+    { name: 'Leder Geldbörse', price: '44,99 EUR', image: '', shop: 'NOVA', rating: 4.6, reviews: 95 },
+    { name: 'Sneaker Classic Low', price: '59,99 EUR', image: '', shop: 'NOVA', rating: 4.4, reviews: 168 },
+    { name: 'Rucksack 20L', price: '44,99 EUR', image: '', shop: 'NOVA', rating: 4.7, reviews: 251 },
+    { name: 'Powerbank 20.000 mAh', price: '29,99 EUR', image: '', shop: 'NOVA', rating: 4.5, reviews: 188 },
+    { name: 'Yogamatte rutschfest', price: '27,99 EUR', image: '', shop: 'NOVA', rating: 4.6, reviews: 154 }
 ];
 
 function escapeHtml(value) {
@@ -48,9 +53,9 @@ function getProfileName(data) {
     return String(signalName || profileName || '').replace(/^hallo,?\s+/i, '').trim();
 }
 
-function collectHeroProducts(data) {
+function collectHeroProducts(data, sections) {
     const products = [];
-    (data?.sections || []).forEach(section => {
+    (sections || []).forEach(section => {
         (section.products || []).forEach(product => {
             if (product.image && product.image.startsWith('http') && products.length < 3) {
                 products.push(product);
@@ -60,12 +65,12 @@ function collectHeroProducts(data) {
     return products;
 }
 
-function renderHeroProductStrip(data, stage) {
+function renderHeroProductStrip(data, stage, sections) {
     const strip = document.getElementById('heroProductStrip');
     const banner = document.getElementById('heroBanner');
     if (!strip || !banner) return;
 
-    const products = stage !== 'generic' ? collectHeroProducts(data) : [];
+    const products = stage !== 'generic' ? collectHeroProducts(data, sections) : [];
     if (!products.length) {
         strip.style.display = 'none';
         strip.innerHTML = '';
@@ -83,42 +88,33 @@ function renderHeroProductStrip(data, stage) {
     banner.classList.add('hero-with-products');
 }
 
-function renderHeroPersonalization(data, stage) {
+function renderHeroPersonalization(data, stage, sections) {
     const banner = document.getElementById('heroBanner');
     const kicker = document.getElementById('heroPersonalKicker');
     const contextRow = document.getElementById('heroContextRow');
     if (!banner || !kicker || !contextRow) return;
 
-    const level = getShopLevel(data);
-    const shouldShowHyperSignals = stage !== 'generic' && level >= 4;
-    banner.classList.toggle('hero-personalized', stage !== 'generic');
-    banner.classList.toggle('hero-hyper', shouldShowHyperSignals);
+    const personalized = stage !== 'generic';
+    banner.classList.toggle('hero-personalized', personalized);
+    banner.classList.toggle('hero-hyper', personalized && getShopLevel(data) >= 4);
 
-    if (!shouldShowHyperSignals) {
+    // Profil-Auflistung (Stadt, Interessen, beiläufige Details) wird bewusst NICHT
+    // mehr angezeigt - die Personalisierung soll sich durch die Produkte zeigen,
+    // nicht durch eine explizite Aufzählung des Profils.
+    contextRow.style.display = 'none';
+    contextRow.innerHTML = '';
+
+    if (!personalized) {
         kicker.style.display = 'none';
         kicker.textContent = '';
-        contextRow.style.display = 'none';
-        contextRow.innerHTML = '';
-        renderHeroProductStrip(data, stage);
+        renderHeroProductStrip(data, stage, sections);
         return;
     }
 
     const name = getProfileName(data);
     kicker.textContent = name ? `Hallo ${name}` : 'Hallo';
     kicker.style.display = 'inline-flex';
-
-    const contextItems = [
-        getSignalValue(data, 'city'),
-        getSignalValue(data, 'interests'),
-        getSignalValue(data, 'price_sensitivity'),
-        level >= 5 ? data?.creepyMoment?.signal : ''
-    ].filter(Boolean).slice(0, 4);
-
-    contextRow.innerHTML = contextItems
-        .map(item => `<span class="hero-context-chip">${escapeHtml(item)}</span>`)
-        .join('');
-    contextRow.style.display = contextItems.length ? 'flex' : 'none';
-    renderHeroProductStrip(data, stage);
+    renderHeroProductStrip(data, stage, sections);
 }
 
 async function track(type, payload = {}) {
@@ -139,20 +135,21 @@ function getImageHtml(product) {
 }
 
 function getProductByIndex(sectionIndex, productIndex) {
-    const section = shopData?.sections?.[sectionIndex];
+    const section = renderedSections?.[sectionIndex];
     return section?.products?.[productIndex] || null;
 }
 
 function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const imageHtml = getImageHtml(product);
     const shouldPersonalize = stage !== 'generic';
-    const badgeText = product.isCreepyMoment ? 'Aus dem Gespraech' : (stage === 'transparent' ? 'Empfohlen' : 'Fuer Sie');
+    const badgeText = stage === 'transparent' ? 'Empfohlen' : 'Für Sie';
     const badge = product.personalLabel && shouldPersonalize
         ? `<div class="product-badge">${escapeHtml(badgeText)}</div>`
         : '';
     const personalMsg = product.personalLabel && shouldPersonalize
         ? `<div class="personalized-message">${escapeHtml(product.personalLabel)}</div>`
         : '';
+    // Transparente Hinweise nur in der transparenten Ansicht.
     const transparency = product.transparencyReason && stage === 'transparent'
         ? `<div class="transparency-box"><strong>Warum diese Empfehlung?</strong>${escapeHtml(product.transparencyReason)}</div>`
         : '';
@@ -160,10 +157,10 @@ function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const rating = product.rating
         ? `<div class="product-rating">${'★'.repeat(ratingValue)}${'☆'.repeat(5 - ratingValue)} <span>(${escapeHtml(product.reviews || '')})</span></div>`
         : '';
-    const stimulusActions = shouldPersonalize
+    // Pro-Produkt-Kontrolle (Kontrollcenter pro Karte) nur in der transparenten Ansicht.
+    const stimulusActions = stage === 'transparent'
         ? `<div class="product-stimulus-actions">
-            <button type="button" class="why-btn" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich das?</button>
-            ${getShopLevel(shopData) >= 4 ? `<button type="button" class="less-btn" data-section="${sectionIndex}" data-product="${productIndex}">Weniger davon</button>` : ''}
+            <button type="button" class="why-btn" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich diese Empfehlung?</button>
         </div>`
         : '';
 
@@ -185,40 +182,24 @@ function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     `;
 }
 
-function renderPersonalizationPanel(data, stage) {
+// Das Personalisierungsprofil ("Edit"-Panel, das auflistet welches Profil vorliegt)
+// wird in KEINER Ansicht mehr angezeigt.
+function renderPersonalizationPanel() {
     const panel = document.getElementById('personalizationPanel');
-    if (!panel || stage === 'generic' || !data) {
-        if (panel) panel.style.display = 'none';
-        return;
+    if (panel) {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
     }
-
-    const signals = data.usedSignals || [];
-    const signalChips = signals.length
-        ? signals.map(signal => `<span class="signal-chip ${signal.sensitivity === 'high' ? 'sensitive' : ''}">${escapeHtml(signal.label)}: ${escapeHtml(signal.value)}</span>`).join('')
-        : '<span class="signal-chip">Keine sichtbaren Signale</span>';
-    const creepyMoment = data.creepyMoment && getShopLevel(data) >= 5
-        ? `<div class="creepy-moment-banner"><strong>${escapeHtml(data.creepyMoment.headline)}</strong><p>${escapeHtml(data.creepyMoment.text)}</p></div>`
-        : '';
-    const transparentInfo = stage === 'transparent'
-        ? `<div class="data-basis-box"><strong>${escapeHtml(data.explanationDetails?.transparentIntro || 'Genutzte Signale')}</strong><div class="signal-chip-row">${signalChips}</div></div>`
-        : `<div class="signal-chip-row">${signalChips}</div>`;
-
-    panel.innerHTML = `
-        <div class="personalization-panel-header">
-            <span>${escapeHtml(getStageLabel(stage))}</span>
-            <strong>Personalisierungsprofil</strong>
-        </div>
-        <p>${escapeHtml(data.explanationDetails?.summary || 'Der Shop wurde anhand deines Interviewprofils angepasst.')}</p>
-        ${transparentInfo}
-        ${creepyMoment}
-    `;
-    panel.style.display = 'block';
 }
 
+// Kontrollcenter: nur in der transparenten Ansicht sichtbar.
 function renderControlCenter(data, stage) {
     const panel = document.getElementById('controlCenterPanel');
-    if (!panel || stage === 'generic' || !data || getShopLevel(data) < 4) {
-        if (panel) panel.style.display = 'none';
+    if (!panel || stage !== 'transparent' || !data) {
+        if (panel) {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+        }
         return;
     }
 
@@ -229,9 +210,10 @@ function renderControlCenter(data, stage) {
             <span><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></span>
         </label>
     `).join('');
-    const sensitiveSignals = (data.usedSignals || []).filter(signal => signal.sensitivity === 'high');
-    const sensitiveButtons = stage === 'transparent' && sensitiveSignals.length
-        ? `<div class="sensitive-controls">${sensitiveSignals.map(signal => `<button type="button" class="reject-signal-btn" data-signal="${escapeHtml(signal.key)}">Diese Info nicht verwenden: ${escapeHtml(signal.label)}</button>`).join('')}</div>`
+
+    const actions = data.controlActions || [];
+    const actionHtml = actions.length
+        ? `<div class="modal-action-row">${actions.map(action => `<button type="button" class="modal-secondary-btn" data-control-action="${escapeHtml(action.id)}" title="${escapeHtml(action.description || '')}">${escapeHtml(action.label)}</button>`).join('')}</div>`
         : '';
 
     panel.innerHTML = `
@@ -239,22 +221,24 @@ function renderControlCenter(data, stage) {
             <span>Kontrollcenter</span>
             <strong>Personalisierung anpassen</strong>
         </div>
+        <p>Lege fest, welche Informationen der Shop für deine Empfehlungen verwenden darf.</p>
         <div class="control-toggle-list">${optionHtml}</div>
-        ${sensitiveButtons}
+        ${actionHtml}
     `;
     panel.style.display = 'block';
 }
 
 function renderGenericShop() {
-    document.getElementById('topBar').textContent = 'Kostenloser Versand ab 50 EUR | 30 Tage Rueckgaberecht';
+    document.getElementById('topBar').textContent = 'Kostenloser Versand ab 50 EUR | 30 Tage Rückgaberecht';
     document.getElementById('greeting').textContent = '';
-    document.getElementById('heroHeadline').textContent = 'Fruehjahr Kollektion 2026';
+    document.getElementById('heroHeadline').textContent = 'Frühjahr Kollektion 2026';
     document.getElementById('heroSubtext').textContent = 'Entdecke die neuesten Trends';
     document.getElementById('heroCta').textContent = 'Jetzt shoppen';
-    renderHeroPersonalization(null, 'generic');
+    renderHeroPersonalization(null, 'generic', []);
     document.getElementById('mainNav').innerHTML = ['Neu', 'Bestseller', 'Mode', 'Sport', 'Tech', 'Lifestyle'].map(c => `<a href="#">${c}</a>`).join('');
-    renderPersonalizationPanel(null, 'generic');
+    renderPersonalizationPanel();
     renderControlCenter(null, 'generic');
+    renderedSections = [{ id: 'generic_fallback', products: GENERIC_PRODUCTS }];
     document.getElementById('shopSections').innerHTML = `
         <section class="recommendations-section">
             <div class="section-header">
@@ -272,26 +256,36 @@ function renderGenericShop() {
 
 function renderPersonalizedShop(data, stage) {
     const stageKey = stage === 'generic' ? 'generic' : 'personalized';
+
+    // Generic-Ansicht zeigt einen ANDEREN, neutralen Produktsatz als die
+    // personalisierte Ansicht (sofern vorhanden).
+    let sections;
+    if (stage === 'generic' && Array.isArray(data.genericSections) && data.genericSections.length) {
+        sections = data.genericSections;
+    } else {
+        sections = data.sections || [];
+    }
+    renderedSections = sections;
+
     const banner = data.topBanner;
     document.getElementById('topBar').textContent = typeof banner === 'object' ? (banner[stageKey] || banner.generic) : banner;
     const greet = data.greeting;
     document.getElementById('greeting').textContent = stage !== 'generic' ? (typeof greet === 'object' ? (greet.personalized || '') : greet) : '';
     const hero = data.hero;
     const heroData = typeof hero === 'object' && hero[stageKey] ? hero[stageKey] : hero.generic || hero;
-    document.getElementById('heroHeadline').textContent = heroData.headline || 'Fruehjahr Kollektion 2026';
+    document.getElementById('heroHeadline').textContent = heroData.headline || 'Frühjahr Kollektion 2026';
     document.getElementById('heroSubtext').textContent = heroData.subtext || 'Entdecke die neuesten Trends';
     document.getElementById('heroCta').textContent = heroData.cta || 'Jetzt shoppen';
-    renderHeroPersonalization(data, stage);
+    renderHeroPersonalization(data, stage, sections);
 
     const nav = data.navCategories;
     const navItems = typeof nav === 'object' && !Array.isArray(nav)
         ? (nav[stageKey] || nav.generic || ['Neu', 'Bestseller', 'Mode'])
         : (nav || ['Neu', 'Bestseller', 'Mode']);
     document.getElementById('mainNav').innerHTML = navItems.map(c => `<a href="#">${escapeHtml(c)}</a>`).join('');
-    renderPersonalizationPanel(data, stage);
+    renderPersonalizationPanel();
     renderControlCenter(data, stage);
 
-    const sections = data.sections || [];
     let sectionsHtml = '';
     sections.forEach((section, sectionIndex) => {
         if (!section.products || section.products.length === 0) return;
@@ -311,7 +305,7 @@ function renderPersonalizedShop(data, stage) {
             </section>
         `;
     });
-    document.getElementById('shopSections').innerHTML = sectionsHtml || '<p style="text-align:center;padding:40px;color:#666;">Keine Produkte verfuegbar.</p>';
+    document.getElementById('shopSections').innerHTML = sectionsHtml || '<p style="text-align:center;padding:40px;color:#666;">Keine Produkte verfügbar.</p>';
 
     if (data.trustBadges && stage !== 'generic') {
         renderCustomTrustBadges(data.trustBadges, stageKey);
@@ -323,8 +317,8 @@ function renderPersonalizedShop(data, stage) {
 function renderGenericTrustBadges() {
     document.getElementById('trustBadges').innerHTML = `
         <div class="trust-badge"><span class="trust-icon">OK</span><div><strong>Schneller Versand</strong><p>1-3 Werktage</p></div></div>
-        <div class="trust-badge"><span class="trust-icon">↺</span><div><strong>Einfache Rueckgabe</strong><p>30 Tage kostenlos</p></div></div>
-        <div class="trust-badge"><span class="trust-icon">SSL</span><div><strong>Sicherer Kauf</strong><p>SSL verschluesselt</p></div></div>
+        <div class="trust-badge"><span class="trust-icon">↺</span><div><strong>Einfache Rückgabe</strong><p>30 Tage kostenlos</p></div></div>
+        <div class="trust-badge"><span class="trust-icon">SSL</span><div><strong>Sicherer Kauf</strong><p>SSL verschlüsselt</p></div></div>
     `;
 }
 
@@ -346,15 +340,46 @@ function closeModal() {
     document.getElementById('shopModal').style.display = 'none';
 }
 
+// Pro-Produkt-Erklärung + Kontrollcenter: transparente Erklärung plus die
+// Möglichkeit, mehr Kontrolle auszuüben (einzelne Infos ausschließen,
+// Datenquellen steuern, weitere Kontroll-Aktionen).
 function showWhyModal(product, sectionIndex, productIndex) {
     track('why_click', { sectionIndex, productIndex, productName: product.name });
-    const signals = (shopData?.usedSignals || []).map(signal => `<li>${escapeHtml(signal.label)}: ${escapeHtml(signal.value)}</li>`).join('');
+
+    const reason = product.whyDetails || product.transparencyReason
+        || 'Diese Empfehlung basiert auf deinem Interviewprofil und den daraus abgeleiteten Suchbegriffen.';
+
+    const signals = shopData?.usedSignals || [];
+    const signalControls = signals.length
+        ? signals.map(signal => `<button type="button" class="reject-signal-btn" data-signal="${escapeHtml(signal.key)}">Diese Information nicht verwenden: ${escapeHtml(signal.label)}</button>`).join('')
+        : '<p style="font-size:13px;color:#666;margin:0;">Für dieses Produkt sind keine einzelnen Signale hinterlegt.</p>';
+
+    const options = shopData?.controlOptions || [];
+    const optionHtml = options.map(option => `
+        <label class="control-toggle">
+            <input type="checkbox" ${option.enabled ? 'checked' : ''} data-control-id="${escapeHtml(option.id)}">
+            <span><strong>${escapeHtml(option.label)}</strong><small>${escapeHtml(option.description)}</small></span>
+        </label>
+    `).join('');
+
+    const actions = shopData?.controlActions || [];
+    const actionHtml = actions.length
+        ? `<div class="modal-action-row">${actions.map(action => `<button type="button" class="modal-secondary-btn" data-control-action="${escapeHtml(action.id)}" title="${escapeHtml(action.description || '')}">${escapeHtml(action.label)}</button>`).join('')}</div>`
+        : '';
+
     openModal(`
-        <h2>Warum sehe ich das?</h2>
-        <p>${escapeHtml(product.whyDetails || product.transparencyReason || 'Diese Empfehlung basiert auf deinem Interviewprofil und den abgeleiteten Suchbegriffen.')}</p>
-        <div class="modal-signal-box">
-            <strong>Genutzte Signale</strong>
-            <ul>${signals || '<li>Allgemeine Shop-Signale</li>'}</ul>
+        <h2>Warum sehe ich diese Empfehlung?</h2>
+        <p class="modal-why-reason">${escapeHtml(reason)}</p>
+        <div class="modal-control-section">
+            <strong>Diese Daten werden hierfür genutzt</strong>
+            <p>Du kannst einzelne Informationen von der Personalisierung ausschließen.</p>
+            <div class="modal-signal-controls">${signalControls}</div>
+        </div>
+        <div class="modal-control-section">
+            <strong>Personalisierung steuern</strong>
+            <p>Lege fest, welche Datenquellen der Shop verwenden darf.</p>
+            <div class="modal-control-list">${optionHtml}</div>
+            ${actionHtml}
         </div>
     `);
 }
@@ -368,8 +393,8 @@ function showProductModal(product, sectionIndex, productIndex) {
                 <p class="product-brand">${escapeHtml(product.shop || 'NOVA')}</p>
                 <h2>${escapeHtml(product.name)}</h2>
                 <p class="modal-price">${escapeHtml(product.price)}</p>
-                <p>${escapeHtml(product.whyDetails || 'Dieses Produkt stammt aus echten Shopping-Ergebnissen und wurde in den Grundshop aufgenommen.')}</p>
-                ${currentStage !== 'generic' ? `<button type="button" class="modal-secondary-btn" data-modal-action="why" data-section="${sectionIndex}" data-product="${productIndex}">Warum dieses Produkt?</button>` : ''}
+                <p>${escapeHtml(product.whyDetails || 'Dieses Produkt stammt aus echten Shopping-Ergebnissen und wurde in den Shop aufgenommen.')}</p>
+                ${currentStage === 'transparent' ? `<button type="button" class="modal-secondary-btn" data-modal-action="why" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich diese Empfehlung?</button>` : ''}
             </div>
         </div>
     `);
@@ -380,14 +405,6 @@ document.addEventListener('click', (event) => {
     if (whyButton) {
         const product = getProductByIndex(Number(whyButton.dataset.section), Number(whyButton.dataset.product));
         if (product) showWhyModal(product, Number(whyButton.dataset.section), Number(whyButton.dataset.product));
-        return;
-    }
-    const lessButton = event.target.closest('.less-btn');
-    if (lessButton) {
-        const product = getProductByIndex(Number(lessButton.dataset.section), Number(lessButton.dataset.product));
-        track('less_like_this_click', { productName: product?.name || '', sectionIndex: lessButton.dataset.section, productIndex: lessButton.dataset.product });
-        lessButton.textContent = 'Vermerkt';
-        lessButton.disabled = true;
         return;
     }
     const detailButton = event.target.closest('.product-detail-trigger');
@@ -403,6 +420,13 @@ document.addEventListener('click', (event) => {
         track('reject_signal_click', { signal: rejectSignalButton.dataset.signal });
         rejectSignalButton.textContent = 'Info ausgeschlossen';
         rejectSignalButton.disabled = true;
+        return;
+    }
+    const controlAction = event.target.closest('[data-control-action]');
+    if (controlAction) {
+        track('control_action_click', { id: controlAction.dataset.controlAction });
+        controlAction.textContent = 'Vermerkt';
+        controlAction.disabled = true;
         return;
     }
     const controlInput = event.target.closest('.control-toggle input');

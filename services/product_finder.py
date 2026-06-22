@@ -289,6 +289,89 @@ def find_products(profile, level):
                     product['search_query'] = query
                     all_products.append(product)
     
-    # Limit based on level
-    max_products = 8 if level == 1 else 14
+    # Limit based on level (more products = more realistic shop)
+    max_products = 16 if level == 1 else 20
     return upgrade_product_images(all_products[:max_products])
+
+
+# Neutrale, NICHT personalisierte Suchbegriffe fuer den Baseline-/Generic-Shop.
+# Diese sollen sich bewusst von den profilbasierten Empfehlungen unterscheiden.
+GENERIC_PRODUCT_QUERIES = [
+    "bluetooth kopfhoerer",
+    "sneaker herren",
+    "kaffeemaschine",
+    "rucksack alltag",
+    "smartwatch",
+    "sonnenbrille unisex",
+    "edelstahl trinkflasche",
+    "led schreibtischlampe",
+    "kuechenwaage digital",
+    "bestseller roman",
+]
+
+# Fallback-Katalog, falls keine Bilder/Serper-Ergebnisse verfuegbar sind.
+GENERIC_FALLBACK_PRODUCTS = [
+    {"name": "Bluetooth Kopfhoerer Over-Ear", "price": "79,99 EUR", "shop": "NOVA", "rating": 4.6, "reviews": 214},
+    {"name": "Sneaker Classic Low", "price": "59,99 EUR", "shop": "NOVA", "rating": 4.4, "reviews": 168},
+    {"name": "Filterkaffeemaschine 1,2 L", "price": "49,99 EUR", "shop": "NOVA", "rating": 4.5, "reviews": 132},
+    {"name": "Tagesrucksack 20 L", "price": "44,99 EUR", "shop": "NOVA", "rating": 4.7, "reviews": 251},
+    {"name": "Smartwatch Fitness", "price": "89,99 EUR", "shop": "NOVA", "rating": 4.3, "reviews": 309},
+    {"name": "Sonnenbrille UV400", "price": "24,99 EUR", "shop": "NOVA", "rating": 4.2, "reviews": 87},
+    {"name": "Edelstahl Trinkflasche 750 ml", "price": "19,99 EUR", "shop": "NOVA", "rating": 4.6, "reviews": 176},
+    {"name": "LED Schreibtischlampe dimmbar", "price": "34,99 EUR", "shop": "NOVA", "rating": 4.5, "reviews": 142},
+    {"name": "Digitale Kuechenwaage", "price": "16,99 EUR", "shop": "NOVA", "rating": 4.6, "reviews": 198},
+    {"name": "Bestseller Roman des Jahres", "price": "14,99 EUR", "shop": "NOVA", "rating": 4.8, "reviews": 421},
+    {"name": "Baumwoll T-Shirt Basic", "price": "19,99 EUR", "shop": "NOVA", "rating": 4.4, "reviews": 263},
+    {"name": "Powerbank 20.000 mAh", "price": "29,99 EUR", "shop": "NOVA", "rating": 4.5, "reviews": 188},
+    {"name": "Yogamatte rutschfest", "price": "27,99 EUR", "shop": "NOVA", "rating": 4.6, "reviews": 154},
+    {"name": "Duftkerze Vanille", "price": "12,99 EUR", "shop": "NOVA", "rating": 4.3, "reviews": 96},
+    {"name": "Lederguertel Klassik", "price": "22,99 EUR", "shop": "NOVA", "rating": 4.5, "reviews": 119},
+    {"name": "Thermosflasche 500 ml", "price": "21,99 EUR", "shop": "NOVA", "rating": 4.6, "reviews": 207},
+]
+
+
+def find_generic_products(max_products=16):
+    """Sucht neutrale, nicht personalisierte Produkte fuer den Baseline-Shop.
+
+    Faellt auf einen statischen Katalog zurueck, wenn keine API/Bilder vorliegen.
+    """
+    api_key = os.environ.get('SERPER_API_KEY')
+    if not api_key:
+        return GENERIC_FALLBACK_PRODUCTS[:max_products]
+
+    all_products = []
+    seen_names = set()
+    queries = GENERIC_PRODUCT_QUERIES[:6]
+
+    workers = min(len(queries), 5)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(search_products, query): query for query in queries}
+        for future in as_completed(futures):
+            query = futures[future]
+            try:
+                results = future.result()
+            except Exception as e:
+                print(f"Generic product search failed for query '{query}': {e}")
+                results = []
+
+            for product in results:
+                if not product.get('name') or not product.get('image'):
+                    continue
+                name_key = product['name'].lower()[:50]
+                if name_key not in seen_names:
+                    seen_names.add(name_key)
+                    product['search_query'] = query
+                    all_products.append(product)
+
+    if not all_products:
+        return GENERIC_FALLBACK_PRODUCTS[:max_products]
+
+    upgraded = upgrade_product_images(all_products[:max_products])
+    # Falls zu wenige echte Treffer, mit Fallback auffuellen
+    if len(upgraded) < 8:
+        for fb in GENERIC_FALLBACK_PRODUCTS:
+            if len(upgraded) >= max_products:
+                break
+            if fb['name'].lower()[:50] not in seen_names:
+                upgraded.append(fb)
+    return upgraded[:max_products]
