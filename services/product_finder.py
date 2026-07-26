@@ -236,6 +236,14 @@ def upgrade_product_images(products):
     if not products:
         return products
 
+    # Keep the original Google Shopping image as a fallback. Image-search
+    # results are often larger, but some source sites block server-side proxy
+    # requests even though the Shopping thumbnail remains available.
+    for product in products:
+        original_image = str(product.get('image') or '').strip()
+        if original_image:
+            product['thumbnailImage'] = original_image
+
     max_workers = min(len(products), IMAGE_SEARCH_WORKERS)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(search_high_quality_image, product): product for product in products}
@@ -248,10 +256,64 @@ def upgrade_product_images(products):
                 upgraded_image = ""
 
             if upgraded_image:
-                product['thumbnailImage'] = product.get('image', '')
                 product['image'] = upgraded_image
 
     return products
+
+
+def search_product_batches(queries, context):
+    """Search queries concurrently while retaining their original order."""
+    batches = {}
+    if not queries:
+        return batches
+
+    max_workers = min(len(queries), 5)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(search_products, query): query for query in queries}
+        for future in as_completed(futures):
+            query = futures[future]
+            try:
+                batches[query] = future.result()
+            except Exception as e:
+                print(f"{context} product search failed for query '{query}': {e}")
+                batches[query] = []
+
+    return batches
+
+
+def select_products_round_robin(queries, batches, max_products, per_query_limit=None):
+    """Select products evenly across queries instead of by response speed."""
+    prepared = {}
+    for query in queries:
+        valid = []
+        for product in batches.get(query, []):
+            if not product.get('name') or not product.get('image'):
+                continue
+            entry = dict(product)
+            entry['search_query'] = query
+            valid.append(entry)
+        prepared[query] = valid[:per_query_limit] if per_query_limit else valid
+
+    selected = []
+    seen_names = set()
+    max_rounds = max((len(items) for items in prepared.values()), default=0)
+    for product_index in range(max_rounds):
+        for query in queries:
+            products = prepared.get(query, [])
+            if product_index >= len(products):
+                continue
+
+            product = products[product_index]
+            name_key = product['name'].lower()[:50]
+            if name_key in seen_names:
+                continue
+
+            seen_names.add(name_key)
+            selected.append(product)
+            if len(selected) >= max_products:
+                return selected
+
+    return selected
 
 
 def find_products(profile, level):
@@ -263,50 +325,27 @@ def find_products(profile, level):
 
     queries = unique_queries(generated_queries + fallback_search_queries(profile, level), level)
     
-    all_products = []
-    seen_names = set()
-    
     if not queries:
         return []
 
-    max_workers = min(len(queries), 5)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(search_products, query): query for query in queries}
-        for future in as_completed(futures):
-            query = futures[future]
-            try:
-                results = future.result()
-            except Exception as e:
-                print(f"Product search failed for query '{query}': {e}")
-                results = []
-
-            for product in results:
-                if not product.get('name') or not product.get('image'):
-                    continue
-                name_key = product['name'].lower()[:50]
-                if name_key not in seen_names:
-                    seen_names.add(name_key)
-                    product['search_query'] = query
-                    all_products.append(product)
-    
     # Limit based on level (more products = more realistic shop)
     max_products = 16 if level == 1 else 20
-    return upgrade_product_images(all_products[:max_products])
+    batches = search_product_batches(queries, "Personalized")
+    selected = select_products_round_robin(queries, batches, max_products)
+    return upgrade_product_images(selected)
 
 
 # Neutrale, NICHT personalisierte Suchbegriffe fuer den Baseline-/Generic-Shop.
 # Diese sollen sich bewusst von den profilbasierten Empfehlungen unterscheiden.
 GENERIC_PRODUCT_QUERIES = [
-    "bluetooth kopfhoerer",
-    "sneaker herren",
-    "kaffeemaschine",
+    "kabellose kopfhoerer bestseller",
+    "sneaker unisex bestseller",
     "rucksack alltag",
-    "smartwatch",
-    "sonnenbrille unisex",
-    "edelstahl trinkflasche",
-    "led schreibtischlampe",
-    "kuechenwaage digital",
-    "bestseller roman",
+    "hautpflege set bestseller",
+    "wohnzimmer deko modern",
+    "gesellschaftsspiel bestseller",
+    "schreibtischlampe modern",
+    "kaffeemaschine bestseller",
 ]
 
 # Fallback-Katalog, falls keine Bilder/Serper-Ergebnisse verfuegbar sind.
@@ -339,39 +378,26 @@ def find_generic_products(max_products=16):
     if not api_key:
         return GENERIC_FALLBACK_PRODUCTS[:max_products]
 
-    all_products = []
-    seen_names = set()
-    queries = GENERIC_PRODUCT_QUERIES[:6]
+    queries = GENERIC_PRODUCT_QUERIES
+    batches = search_product_batches(queries, "Generic")
+    selected = select_products_round_robin(
+        queries,
+        batches,
+        max_products,
+        per_query_limit=2,
+    )
 
-    workers = min(len(queries), 5)
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(search_products, query): query for query in queries}
-        for future in as_completed(futures):
-            query = futures[future]
-            try:
-                results = future.result()
-            except Exception as e:
-                print(f"Generic product search failed for query '{query}': {e}")
-                results = []
-
-            for product in results:
-                if not product.get('name') or not product.get('image'):
-                    continue
-                name_key = product['name'].lower()[:50]
-                if name_key not in seen_names:
-                    seen_names.add(name_key)
-                    product['search_query'] = query
-                    all_products.append(product)
-
-    if not all_products:
-        return GENERIC_FALLBACK_PRODUCTS[:max_products]
-
-    upgraded = upgrade_product_images(all_products[:max_products])
-    # Falls zu wenige echte Treffer, mit Fallback auffuellen
-    if len(upgraded) < 8:
+    # Fill before image upgrade so fallback catalog entries also receive a
+    # Serper image search instead of reaching the UI with an empty image.
+    if len(selected) < max_products:
+        seen_names = {product['name'].lower()[:50] for product in selected}
         for fb in GENERIC_FALLBACK_PRODUCTS:
-            if len(upgraded) >= max_products:
+            if len(selected) >= max_products:
                 break
             if fb['name'].lower()[:50] not in seen_names:
-                upgraded.append(fb)
-    return upgraded[:max_products]
+                entry = dict(fb)
+                entry['search_query'] = "neutraler Bestseller"
+                selected.append(entry)
+                seen_names.add(fb['name'].lower()[:50])
+
+    return upgrade_product_images(selected[:max_products])

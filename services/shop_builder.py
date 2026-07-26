@@ -231,6 +231,7 @@ def _normalize_products(products):
             "name": name,
             "price": str(product.get("price") or "Preis auf Anfrage").strip(),
             "image": str(product.get("image") or "").strip(),
+            "thumbnailImage": str(product.get("thumbnailImage") or "").strip(),
             "shop": str(product.get("shop") or "NOVA").strip(),
             "rating": rating or 4.5,
             "reviews": reviews or 100,

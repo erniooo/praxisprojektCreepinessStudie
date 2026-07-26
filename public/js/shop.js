@@ -57,7 +57,7 @@ function collectHeroProducts(data, sections) {
     const products = [];
     (sections || []).forEach(section => {
         (section.products || []).forEach(product => {
-            if (product.image && product.image.startsWith('http') && products.length < 3) {
+            if (getProductImageUrls(product).length && products.length < 3) {
                 products.push(product);
             }
         });
@@ -127,11 +127,44 @@ async function track(type, payload = {}) {
     } catch (err) {}
 }
 
+function getProductImageUrls(product) {
+    const urls = [product?.image, product?.thumbnailImage]
+        .filter(url => typeof url === 'string' && url.startsWith('http'));
+    return [...new Set(urls)];
+}
+
+function getImageCandidates(product) {
+    const candidates = [];
+    getProductImageUrls(product).forEach(url => {
+        candidates.push(`/api/image/proxy?url=${encodeURIComponent(url)}`);
+        candidates.push(url);
+    });
+    return [...new Set(candidates)];
+}
+
+function tryNextProductImage(image) {
+    let remaining = [];
+    try {
+        remaining = JSON.parse(decodeURIComponent(image.dataset.imageFallbacks || ''));
+    } catch (err) {}
+
+    const next = remaining.shift();
+    if (next) {
+        image.dataset.imageFallbacks = encodeURIComponent(JSON.stringify(remaining));
+        image.src = next;
+        return;
+    }
+
+    image.onerror = null;
+    image.parentElement.innerHTML = '<div class="product-img-placeholder">Produktbild</div>';
+}
+
 function getImageHtml(product) {
-    const hasImage = product.image && product.image.startsWith('http');
-    if (!hasImage) return '<div class="product-img-placeholder">Box</div>';
-    const imageSrc = `/api/image/proxy?url=${encodeURIComponent(product.image)}`;
-    return `<img src="${imageSrc}" alt="${escapeHtml(product.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=product-img-placeholder>Box</div>'">`;
+    const candidates = getImageCandidates(product);
+    if (!candidates.length) return '<div class="product-img-placeholder">Produktbild</div>';
+
+    const remaining = encodeURIComponent(JSON.stringify(candidates.slice(1)));
+    return `<img src="${escapeHtml(candidates[0])}" data-image-fallbacks="${escapeHtml(remaining)}" alt="${escapeHtml(product.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="tryNextProductImage(this)">`;
 }
 
 function getProductByIndex(sectionIndex, productIndex) {
