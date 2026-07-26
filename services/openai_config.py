@@ -8,7 +8,7 @@ def _int_env(name, default):
         return default
 
 
-PERSONALIZATION_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.5")
+PERSONALIZATION_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")
 TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
 JSON_RESPONSE_FORMAT = {"type": "json_object"}
 PERSONALIZATION_REASONING_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "medium")
