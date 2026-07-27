@@ -120,10 +120,18 @@ def _stage_metadata(level):
                 ]
             },
             "transparent": {
-                "goal": "Transparenz, Kontrolle und mögliche Übertransparenz prüfen.",
+                "goal": "Transparenz und mögliche Übertransparenz ohne Kontrolloptionen prüfen.",
                 "questions": [
                     "Hilft dir die Erklärung oder macht sie es unangenehmer?",
-                    "Welche Informationen sollte ein Shop nicht nutzen?",
+                    "Wird die Empfehlung durch die Erklärung nachvollziehbarer?",
+                    "Welche Informationen sollte ein Shop nicht offenlegen oder nutzen?"
+                ]
+            },
+            "transparent_control": {
+                "goal": "Wirkung konkreter Kontrollmöglichkeiten getrennt von Transparenz prüfen.",
+                "questions": [
+                    "Gibt dir das Kontrollcenter mehr Vertrauen oder Sicherheit?",
+                    "Welche Informationen würdest du selbst ausschalten?",
                     "Was würdest du gern selbst steuern oder ausschalten?"
                 ]
             }

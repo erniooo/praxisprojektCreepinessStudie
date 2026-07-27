@@ -31,10 +31,18 @@ const fallbackStageScripts = {
         ]
     },
     transparent: {
-        goal: 'Transparenz, Kontrolle und moegliche Uebertransparenz pruefen.',
+        goal: 'Transparenz und moegliche Uebertransparenz ohne Kontrolloptionen pruefen.',
         questions: [
             'Hilft dir die Erklaerung oder macht sie es unangenehmer?',
-            'Welche Informationen sollte ein Shop nicht nutzen?',
+            'Wird die Empfehlung durch die Erklaerung nachvollziehbarer?',
+            'Welche Informationen sollte ein Shop nicht offenlegen oder nutzen?'
+        ]
+    },
+    transparent_control: {
+        goal: 'Wirkung konkreter Kontrollmoeglichkeiten getrennt von Transparenz pruefen.',
+        questions: [
+            'Gibt dir das Kontrollcenter mehr Vertrauen oder Sicherheit?',
+            'Welche Informationen wuerdest du selbst ausschalten?',
             'Was wuerdest du gern selbst steuern oder ausschalten?'
         ]
     }
@@ -43,7 +51,8 @@ const fallbackStageScripts = {
 const stageLabels = {
     generic: 'Baseline',
     personalized: 'Personalisierte Stage',
-    transparent: 'Transparente Stage'
+    transparent: 'Transparente Stage',
+    transparent_control: 'Transparenz + Kontrolle'
 };
 
 let currentStage = 'generic';

@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from services import product_finder
-from services.shop_builder import _normalize_products
+from services.shop_builder import _normalize_products, _stage_metadata
 
 
 def product(name, image):
@@ -96,6 +96,18 @@ class ProductSelectionTests(unittest.TestCase):
                 sum(item["search_query"] == query for item in selected),
                 2,
             )
+
+
+class StageFlowTests(unittest.TestCase):
+    def test_transparency_and_control_have_separate_stage_scripts(self):
+        scripts = _stage_metadata(3)["stageScripts"]
+
+        self.assertEqual(
+            list(scripts),
+            ["generic", "personalized", "transparent", "transparent_control"],
+        )
+        self.assertIn("ohne Kontrolloptionen", scripts["transparent"]["goal"])
+        self.assertIn("getrennt von Transparenz", scripts["transparent_control"]["goal"])
 
 
 if __name__ == "__main__":

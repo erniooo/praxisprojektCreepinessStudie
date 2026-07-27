@@ -34,9 +34,18 @@ function escapeHtml(value) {
 }
 
 function getStageLabel(stage) {
+    if (stage === 'transparent_control') return 'Transparent + Kontrolle';
     if (stage === 'transparent') return 'Transparent';
     if (stage === 'personalized') return 'Personalisiert';
     return 'Baseline';
+}
+
+function isTransparentStage(stage) {
+    return stage === 'transparent' || stage === 'transparent_control';
+}
+
+function hasControlOptions(stage) {
+    return stage === 'transparent_control';
 }
 
 function getShopLevel(data) {
@@ -175,23 +184,23 @@ function getProductByIndex(sectionIndex, productIndex) {
 function renderProductCard(product, stage, sectionIndex = 0, productIndex = 0) {
     const imageHtml = getImageHtml(product);
     const shouldPersonalize = stage !== 'generic';
-    const badgeText = stage === 'transparent' ? 'Empfohlen' : 'Für Sie';
+    const badgeText = isTransparentStage(stage) ? 'Empfohlen' : 'Für Sie';
     const badge = product.personalLabel && shouldPersonalize
         ? `<div class="product-badge">${escapeHtml(badgeText)}</div>`
         : '';
     const personalMsg = product.personalLabel && shouldPersonalize
         ? `<div class="personalized-message">${escapeHtml(product.personalLabel)}</div>`
         : '';
-    // Transparente Hinweise nur in der transparenten Ansicht.
-    const transparency = product.transparencyReason && stage === 'transparent'
+    // Transparente Hinweise in beiden transparenten Ansichten.
+    const transparency = product.transparencyReason && isTransparentStage(stage)
         ? `<div class="transparency-box"><strong>Warum diese Empfehlung?</strong>${escapeHtml(product.transparencyReason)}</div>`
         : '';
     const ratingValue = Math.max(0, Math.min(5, Math.round(product.rating || 0)));
     const rating = product.rating
         ? `<div class="product-rating">${'★'.repeat(ratingValue)}${'☆'.repeat(5 - ratingValue)} <span>(${escapeHtml(product.reviews || '')})</span></div>`
         : '';
-    // Pro-Produkt-Kontrolle (Kontrollcenter pro Karte) nur in der transparenten Ansicht.
-    const stimulusActions = stage === 'transparent'
+    // Pro-Produkt-Kontrolle erst in der vierten Stage.
+    const stimulusActions = hasControlOptions(stage)
         ? `<div class="product-stimulus-actions">
             <button type="button" class="why-btn" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich diese Empfehlung?</button>
         </div>`
@@ -225,10 +234,10 @@ function renderPersonalizationPanel() {
     }
 }
 
-// Kontrollcenter: nur in der transparenten Ansicht sichtbar.
+// Kontrollcenter: nur in der vierten Stage "Transparent + Kontrolle".
 function renderControlCenter(data, stage) {
     const panel = document.getElementById('controlCenterPanel');
-    if (!panel || stage !== 'transparent' || !data) {
+    if (!panel || !hasControlOptions(stage) || !data) {
         if (panel) {
             panel.style.display = 'none';
             panel.innerHTML = '';
@@ -427,7 +436,7 @@ function showProductModal(product, sectionIndex, productIndex) {
                 <h2>${escapeHtml(product.name)}</h2>
                 <p class="modal-price">${escapeHtml(product.price)}</p>
                 <p>${escapeHtml(product.whyDetails || 'Dieses Produkt stammt aus echten Shopping-Ergebnissen und wurde in den Shop aufgenommen.')}</p>
-                ${currentStage === 'transparent' ? `<button type="button" class="modal-secondary-btn" data-modal-action="why" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich diese Empfehlung?</button>` : ''}
+                ${hasControlOptions(currentStage) ? `<button type="button" class="modal-secondary-btn" data-modal-action="why" data-section="${sectionIndex}" data-product="${productIndex}">Warum sehe ich diese Empfehlung?</button>` : ''}
             </div>
         </div>
     `);

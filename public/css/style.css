@@ -1142,13 +1142,13 @@ small {
 .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .stage-buttons-mod {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 16px;
 }
 
 .btn-stage-mod {
-    flex: 1;
     padding: 12px 8px;
     border: 1px solid rgba(255,255,255,0.12);
     background: transparent;
@@ -2163,7 +2163,7 @@ small {
     }
 
     .stage-buttons-mod {
-        flex-direction: column;
+        grid-template-columns: 1fr;
     }
 }
 

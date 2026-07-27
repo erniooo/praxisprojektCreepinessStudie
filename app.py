@@ -539,7 +539,7 @@ def set_stage():
     if not session_id or session_id not in sessions:
         return jsonify({'error': 'Invalid session'}), 400
 
-    if stage not in ('generic', 'personalized', 'transparent', 'show_ratings'):
+    if stage not in ('generic', 'personalized', 'transparent', 'transparent_control', 'show_ratings'):
         return jsonify({'error': 'Invalid stage'}), 400
 
     if stage == 'show_ratings':
